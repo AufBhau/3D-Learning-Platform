@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Drone Viewer - Learning Platform</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            overflow: hidden;
+            height: 100vh;
+        }
+        
+        #container {
+            display: flex;
+            height: 100vh;
+        }
+        
+        #sidebar {
+            width: 350px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            overflow-y: auto;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+        }
+        
+        #viewer {
+            flex: 1;
+            position: relative;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+        
+        .subtitle {
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 20px;
+        }
+        
+        .lesson-info {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .lesson-info h2 {
+            font-size: 18px;
+            color: #667eea;
+            margin-bottom: 8px;
+        }
+        
+        .lesson-info p {
+            font-size: 14px;
+            color: #666;
+            line-height: 1.6;
+        }
+        
+        .controls {
+            margin-top: 20px;
+        }
+        
+        .controls h3 {
+            font-size: 16px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .control-btn {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border: none;
+            border-radius: 6px;
+            background: #667eea;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+        }
+        
+        .control-btn:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        
+        .control-btn.secondary {
+            background: #95a5a6;
+        }
+        
+        .control-btn.secondary:hover {
+            background: #7f8c8d;
+        }
+        
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 24px;
+            text-align: center;
+            z-index: 10;
+        }
+        
+        .loader {
+            border: 4px solid rgba(255,255,255,0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 370px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .info-box {
+            background: white;
+            padding: 12px;
+            border-left: 3px solid #667eea;
+            border-radius: 4px;
+            margin-top: 15px;
+            font-size: 13px;
+            color: #555;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="sidebar">
+            <h1>{{ course.title }}</h1>
+            <div class="subtitle">Lesson {{ lesson.order }}: {{ lesson.title }}</div>
+            
+            {% if progress.completed %}
+                <div style="background: #d4edda; color: #155724; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #c3e6cb;">
+                    ✅ <strong>Completed!</strong> You finished this lesson.
+                </div>
+            {% endif %}
+            
+            <div class="lesson-info">
+                <h2>{{ lesson.title }}</h2>
+                <p>{{ lesson.description }}</p>
+        </div>
+    
+    {% if lesson.interaction_guide %}
+        <div class="lesson-info" style="background: #e7f3ff; border-left: 3px solid #667eea;">
+            <h2>📖 Instructions</h2>
+            <p>{{ lesson.interaction_guide }}</p>
+        </div>
+    {% endif %}
+            
+            <div class="info-box">
+                <strong>📚 What You'll Learn:</strong>
+                <ul style="margin-top: 8px; padding-left: 20px;">
+                    <li>Drone components</li>
+                    <li>Motor placement</li>
+                    <li>Basic aerodynamics</li>
+                </ul>
+            </div>
+            
+            <div class="controls">
+    <h3>🎮 Controls</h3>
+    <button class="control-btn" onclick="resetCamera()">🔄 Reset View</button>
+    <button class="control-btn" onclick="toggleRotation()">⟳ Auto Rotate</button>
+    <button class="control-btn secondary" onclick="toggleWireframe()">📐 Wireframe Mode</button>
+</div>
+
+<!-- ADD THIS NEW SECTION -->
+<div class="controls" style="margin-top: 20px;">
+    <h3>✅ Progress</h3>
+    <form method="post" action="{% url 'mark_complete' lesson.id %}">
+        {% csrf_token %}
+        {% if progress.completed %}
+            <button type="submit" name="action" value="uncomplete" class="control-btn secondary">
+                ↩️ Mark as Incomplete
+            </button>
+        {% else %}
+            <button type="submit" name="action" value="complete" class="control-btn">
+                ✅ Mark as Complete
+            </button>
+        {% endif %}
+    </form>
+    
+    <a href="{% url 'course_detail' course.id %}" class="control-btn secondary" style="display: block; text-align: center; text-decoration: none; margin-top: 10px;">
+        ← Back to Course
+    </a>
+</div>
+            
+            <div class="info-box" style="margin-top: 20px;">
+                <strong>💡 Tip:</strong> Use your mouse to rotate, zoom, and explore the 3D model from all angles!
+            </div>
+        </div>
+        
+        <div id="viewer">
+            <div id="loading">
+                <div class="loader"></div>
+                <p>Loading Drone Model...</p>
+            </div>
+            <div id="instructions">
+                🖱️ <strong>Left Drag:</strong> Rotate | <strong>Scroll:</strong> Zoom
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    
+    <script>
+        let scene, camera, renderer, drone;
+        let isAutoRotating = true;  // Start with auto-rotate ON
+        let isWireframe = false;
+
+        function init() {
+            console.log('🚀 Initializing 3D viewer...');
+            
+            // Create scene
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a2e);
+
+            // Create camera
+            const viewerDiv = document.getElementById('viewer');
+            camera = new THREE.PerspectiveCamera(
+                60,
+                viewerDiv.clientWidth / viewerDiv.clientHeight,
+                0.1,
+                1000
+            );
+            camera.position.set(0, 2, 5);  // Better starting position
+            camera.lookAt(0, 0, 0);
+
+            // Create renderer
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(viewerDiv.clientWidth, viewerDiv.clientHeight);
+            viewerDiv.appendChild(renderer.domElement);
+
+            // Add grid (helps see scale)
+            const gridHelper = new THREE.GridHelper(10, 10, 0x444444, 0x222222);
+            scene.add(gridHelper);
+
+            // Add LOTS of lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 1.5);
+            scene.add(ambientLight);
+
+            const directionalLight1 = new THREE.DirectionalLight(0xffffff, 1.5);
+            directionalLight1.position.set(5, 10, 5);
+            scene.add(directionalLight1);
+
+            const directionalLight2 = new THREE.DirectionalLight(0xffffff, 1.0);
+            directionalLight2.position.set(-5, 5, -5);
+            scene.add(directionalLight2);
+
+            const pointLight = new THREE.PointLight(0x667eea, 2);
+            pointLight.position.set(0, 5, 0);
+            scene.add(pointLight);
+
+            // Load drone
+            const loader = new THREE.GLTFLoader();
+            {% if lesson.model_file %}
+    loader.load(
+        '{{ lesson.model_file.url }}',
+        function(gltf) {
+            console.log('✅ Model loaded!');
+            drone = gltf.scene;
+            
+            const box = new THREE.Box3().setFromObject(drone);
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+            
+            const scale = 2 / maxDim;
+            drone.scale.set(scale, scale, scale);
+            
+            const center = box.getCenter(new THREE.Vector3());
+            drone.position.x = -center.x * scale;
+            drone.position.y = -center.y * scale;
+            drone.position.z = -center.z * scale;
+            
+            scene.add(drone);
+            document.getElementById('loading').style.display = 'none';
+            
+            console.log('📏 Model size:', size);
+            console.log('🔍 Scale applied:', scale);
+            console.log('📍 Position:', drone.position);
+        },
+        function(xhr) {
+            const percent = Math.round((xhr.loaded / xhr.total * 100));
+            console.log(percent + '% loaded');
+        },
+        function(error) {
+            console.error('❌ Error:', error);
+            document.getElementById('loading').innerHTML = 
+                '<p style="color:red;">Error loading model. Check console (F12).</p>';
+        }
+    );
+{% else %}
+    // No model uploaded for this lesson
+    document.getElementById('loading').innerHTML = 
+        '<div style="text-align: center;">' +
+        '<div style="font-size: 64px; margin-bottom: 20px;">📦</div>' +
+        '<p style="color: white; font-size: 18px; margin-bottom: 10px;">No 3D Model Available</p>' +
+        '<p style="color: rgba(255,255,255,0.7); font-size: 14px;">This lesson doesn\'t have an interactive 3D model yet.</p>' +
+        '</div>';
+    console.log('ℹ️ No model file for this lesson');
+{% endif %}
+
+            addMouseControls();
+            animate();
+        }
+
+        function addMouseControls() {
+            let isDragging = false;
+            let previousMouse = { x: 0, y: 0 };
+
+            renderer.domElement.addEventListener('mousedown', () => {
+                isDragging = true;
+            });
+
+            renderer.domElement.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
+
+            renderer.domElement.addEventListener('mousemove', (e) => {
+                if (isDragging && drone) {
+                    const deltaX = e.offsetX - previousMouse.x;
+                    const deltaY = e.offsetY - previousMouse.y;
+                    
+                    drone.rotation.y += deltaX * 0.01;
+                    drone.rotation.x += deltaY * 0.01;
+                }
+                previousMouse = { x: e.offsetX, y: e.offsetY };
+            });
+
+            renderer.domElement.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            
+            // Calculate zoom factor
+            const zoomSpeed = 0.1;
+            const delta = e.deltaY > 0 ? 1 + zoomSpeed : 1 - zoomSpeed;
+            
+            // Zoom by moving camera toward/away from origin
+            camera.position.multiplyScalar(delta);
+            
+            // Clamp distance
+            const distance = camera.position.length();
+            if (distance < 3) {
+                camera.position.normalize().multiplyScalar(3);
+            } else if (distance > 25) {
+                camera.position.normalize().multiplyScalar(25);
+            }
+            
+            camera.lookAt(0, 0, 0);
+        });
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (isAutoRotating && drone) {
+                drone.rotation.y += 0.01;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function resetCamera() {
+            camera.position.set(0, 2, 5);
+            camera.lookAt(0, 0, 0);
+            if (drone) {
+                drone.rotation.set(0, 0, 0);
+            }
+            console.log('🔄 Camera reset');
+        }
+
+        function toggleRotation() {
+            isAutoRotating = !isAutoRotating;
+            console.log('⟳ Auto rotation:', isAutoRotating ? 'ON' : 'OFF');
+        }
+
+        function toggleWireframe() {
+            if (!drone) return;
+            isWireframe = !isWireframe;
+            drone.traverse((child) => {
+                if (child.isMesh) {
+                    child.material.wireframe = isWireframe;
+                }
+            });
+            console.log('📐 Wireframe:', isWireframe ? 'ON' : 'OFF');
+        }
+
+        window.addEventListener('resize', () => {
+            const viewerDiv = document.getElementById('viewer');
+            camera.aspect = viewerDiv.clientWidth / viewerDiv.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(viewerDiv.clientWidth, viewerDiv.clientHeight);
+        });
+
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>

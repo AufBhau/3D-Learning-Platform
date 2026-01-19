@@ -1,0 +1,108 @@
+{% extends 'courses/base.html' %}
+
+{% block title %}Home - 3D Learning Platform{% endblock %}
+
+{% block extra_css %}
+<style>
+    .hero {
+        text-align: center;
+        padding: 80px 20px;
+        background: rgba(255, 255, 255, 0.60);
+        backdrop-filter: blur(15px);  
+        -webkit-backdrop-filter: blur(15px);
+        border-radius: 20px;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        border: 1px solid rgba(255, 255, 255, 0);  
+    }
+    
+    .hero h1 {
+        font-size: 48px;
+        color: #667eea;
+        margin-bottom: 20px; 
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        font-weight: bold;  
+    }
+    
+    .hero p {
+        font-size: 20px;
+        color: #1a1a1a;
+        margin-bottom: 40px;
+        max-width: 600px;
+        margin-left: auto;
+        margin-right: auto;
+        line-height: 1.6;
+        font-weight: 500
+    }
+    
+    .features {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 30px;
+        margin-top: 60px;
+    }
+    
+    .feature-card {
+        background: rgba(255, 255, 255, 0.60);
+        padding: 30px;
+        border-radius: 15px;
+        text-align: center;
+        transition: transform 0.3s;
+    }
+    
+    .feature-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+    }
+    
+    .feature-card .icon {
+        font-size: 48px;
+        margin-bottom: 15px;
+    }
+    
+    .feature-card h3 {
+        color: #667eea;
+        margin-bottom: 10px;
+        font-weight: bold; 
+    }
+    
+    .feature-card p {
+        color: #1a1a1a;
+        font-size: 14px;
+        font-weight: 500
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <h1>🚁 Learn Engineering with 3D</h1>
+    <p>Explore complex engineering concepts through interactive 3D visualizations. Rotate, zoom, and understand how things really work!</p>
+    <a href="{% url 'course_list' %}" class="btn">🎓 Start Learning Now</a>
+</div>
+
+<div class="features">
+    <div class="feature-card">
+        <div class="icon">🎮</div>
+        <h3>Interactive 3D Models</h3>
+        <p>Rotate and explore models from every angle with intuitive mouse controls</p>
+    </div>
+    
+    <div class="feature-card">
+        <div class="icon">📚</div>
+        <h3>Structured Lessons</h3>
+        <p>Step-by-step courses designed to build your understanding progressively</p>
+    </div>
+    
+    <div class="feature-card">
+        <div class="icon">⚡</div>
+        <h3>Real-World Applications</h3>
+        <p>Learn about drones, motors, transformers, and other engineering marvels</p>
+    </div>
+    
+    <div class="feature-card">
+        <div class="icon">🎯</div>
+        <h3>Self-Paced Learning</h3>
+        <p>Learn at your own speed, revisit lessons anytime you need</p>
+    </div>
+</div>
+{% endblock %}
