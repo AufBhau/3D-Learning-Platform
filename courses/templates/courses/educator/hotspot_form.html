@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block title %}{{ page_title }} — Educator{% endblock %}
+{% block body_class %}hotspot-placer-body{% endblock %}
+
+{% block content %}
+<section class="page-header hotspot-placer-header">
+    <a class="btn btn-secondary" href="{% url 'educator_lesson_edit' lesson.id %}">← {{ lesson.title }}</a>
+    <h1>{{ page_title }}</h1>
+    <p>Rotate the model, then click where the hotspot should sit. Coordinates fill in automatically.</p>
+</section>
+
+<div class="hotspot-placer">
+    <aside class="hotspot-placer-panel panel">
+        <form method="post" id="hotspot-form" novalidate>
+            {% csrf_token %}
+            {% if form.non_field_errors %}
+                <ul class="error-list">
+                    {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+            {% endif %}
+
+            <div class="form-group">
+                <label for="{{ form.title.id_for_label }}">{{ form.title.label }}</label>
+                {{ form.title }}
+                {% if form.title.errors %}
+                    <ul class="error-list">{% for error in form.title.errors %}<li>{{ error }}</li>{% endfor %}</ul>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                <label for="{{ form.description.id_for_label }}">{{ form.description.label }}</label>
+                {{ form.description }}
+                {% if form.description.errors %}
+                    <ul class="error-list">{% for error in form.description.errors %}<li>{{ error }}</li>{% endfor %}</ul>
+                {% endif %}
+            </div>
+
+            <div class="form-group">
+                <label for="{{ form.order.id_for_label }}">{{ form.order.label }}</label>
+                {{ form.order }}
+                {% if form.order.errors %}
+                    <ul class="error-list">{% for error in form.order.errors %}<li>{{ error }}</li>{% endfor %}</ul>
+                {% endif %}
+            </div>
+
+            <div class="coord-block">
+                <div class="coord-block-title">Position from model click</div>
+                <p class="help-text" id="placer-status">Click the model to set coordinates.</p>
+                <div class="coord-grid">
+                    <div class="form-group">
+                        <label for="id_position_x">X</label>
+                        {{ form.position_x }}
+                    </div>
+                    <div class="form-group">
+                        <label for="id_position_y">Y</label>
+                        {{ form.position_y }}
+                    </div>
+                    <div class="form-group">
+                        <label for="id_position_z">Z</label>
+                        {{ form.position_z }}
+                    </div>
+                </div>
+                {% if form.position_x.errors or form.position_y.errors or form.position_z.errors %}
+                    <ul class="error-list">
+                        {% for error in form.position_x.errors %}<li>{{ error }}</li>{% endfor %}
+                        {% for error in form.position_y.errors %}<li>{{ error }}</li>{% endfor %}
+                        {% for error in form.position_z.errors %}<li>{{ error }}</li>{% endfor %}
+                    </ul>
+                {% endif %}
+            </div>
+
+            <div class="actions hotspot-form-actions">
+                <button type="submit" name="action" value="save" class="btn btn-primary">Save hotspot</button>
+                <button type="submit" name="action" value="save_and_add_another" class="btn btn-accent">
+                    Save &amp; add another
+                </button>
+            </div>
+        </form>
+
+        {% if hotspot %}
+        <form method="post" action="{% url 'educator_hotspot_delete' hotspot.id %}" onsubmit="return confirm('Delete this hotspot?');" style="margin-top:0.8rem;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger">Delete hotspot</button>
+        </form>
+        {% endif %}
+    </aside>
+
+    <div class="hotspot-placer-viewer" id="placer-viewer">
+        <div id="placer-loading">
+            <div class="loader"></div>
+            <p>Loading 3D model…</p>
+        </div>
+        <div id="placer-instructions">Drag to rotate · Scroll to zoom · Click to place hotspot</div>
+    </div>
+</div>
+
+{{ placer_config|json_script:"placer-config" }}
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="{% static 'js/hotspot_placer.js' %}?v=3"></script>
+{% endblock %}

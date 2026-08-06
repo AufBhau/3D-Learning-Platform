@@ -1,181 +1,41 @@
-{% extends 'courses/base.html' %}
+{% extends "base.html" %}
 
-{% block title %}{{ course.title }} - 3D Learning Platform{% endblock %}
-
-{% block extra_css %}
-<style>
-    .course-header {
-        background: white;
-        border-radius: 15px;
-        padding: 40px;
-        margin-bottom: 30px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    }
-    
-    .course-header h1 {
-        color: #667eea;
-        font-size: 36px;
-        margin-bottom: 15px;
-    }
-    
-    .course-header p {
-        color: #666;
-        font-size: 18px;
-        line-height: 1.6;
-        margin-bottom: 20px;
-    }
-    
-    .course-meta {
-        display: flex;
-        gap: 30px;
-        margin-top: 20px;
-        padding-top: 20px;
-        border-top: 1px solid #eee;
-    }
-    
-    .meta-item {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        color: #666;
-        font-size: 14px;
-    }
-    
-    .lessons-section {
-        background: white;
-        border-radius: 15px;
-        padding: 30px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    }
-    
-    .lessons-section h2 {
-        color: #333;
-        margin-bottom: 20px;
-        font-size: 24px;
-    }
-    
-    .lesson-list {
-        list-style: none;
-    }
-    
-    .lesson-item {
-        padding: 20px;
-        border: 2px solid #f0f0f0;
-        border-radius: 10px;
-        margin-bottom: 15px;
-        transition: all 0.3s;
-        cursor: pointer;
-    }
-    
-    .lesson-item:hover {
-        border-color: #667eea;
-        background: #f8f9ff;
-        transform: translateX(5px);
-    }
-    
-    .lesson-item h3 {
-        color: #667eea;
-        font-size: 18px;
-        margin-bottom: 8px;
-    }
-    
-    .lesson-item p {
-        color: #666;
-        font-size: 14px;
-        margin-bottom: 12px;
-    }
-    
-    .lesson-number {
-        display: inline-block;
-        background: #667eea;
-        color: white;
-        width: 30px;
-        height: 30px;
-        border-radius: 50%;
-        text-align: center;
-        line-height: 30px;
-        font-weight: bold;
-        margin-right: 10px;
-    }
-    
-    .start-btn {
-        display: inline-block;
-        padding: 8px 20px;
-        background: #667eea;
-        color: white;
-        border-radius: 6px;
-        font-size: 14px;
-        text-decoration: none;
-        transition: all 0.3s;
-    }
-    
-    .start-btn:hover {
-        background: #5568d3;
-        transform: translateY(-2px);
-    }
-    
-    .empty-lessons {
-        text-align: center;
-        padding: 40px;
-        color: #999;
-    }
-    
-    .back-link {
-        display: inline-block;
-        margin-bottom: 20px;
-        color: white;
-        text-decoration: none;
-        font-size: 16px;
-        transition: transform 0.3s;
-    }
-    
-    .back-link:hover {
-        transform: translateX(-5px);
-    }
-</style>
-{% endblock %}
+{% block title %}{{ course.title }} — 3D Learning Platform{% endblock %}
 
 {% block content %}
-<a href="{% url 'course_list' %}" class="back-link">← Back to Courses</a>
-
-<div class="course-header">
+<section class="page-header">
+    <a class="btn btn-secondary" href="{% url 'course_list' %}">← All courses</a>
+    {% if course.thumbnail %}
+        <img class="course-hero-thumb" src="{{ course.thumbnail.url }}" alt="{{ course.title }}">
+    {% endif %}
     <h1>{{ course.title }}</h1>
     <p>{{ course.description }}</p>
-    
-    <div class="course-meta">
-        <div class="meta-item">
-            <span>📖</span>
-            <span><strong>{{ lessons.count }}</strong> lesson{{ lessons.count|pluralize }}</span>
-        </div>
-        <div class="meta-item">
-            <span>📅</span>
-            <span>Created {{ course.created_at|date:"M d, Y" }}</span>
-        </div>
-        <div class="meta-item">
-            <span>🔄</span>
-            <span>Updated {{ course.updated_at|date:"M d, Y" }}</span>
-        </div>
-    </div>
-</div>
-
-<div class="lessons-section">
-    <h2>📚 Course Lessons</h2>
-    
-    {% if lessons %}
-        <ul class="lesson-list">
-            {% for lesson in lessons %}
-                <li class="lesson-item">
-                    <span class="lesson-number">{{ forloop.counter }}</span>
-                    <h3>{{ lesson.title }}</h3>
-                    <p>{{ lesson.description }}</p>
-                    <a href="{% url 'lesson_viewer' lesson.id %}" class="start-btn">Start Lesson →</a>
-                </li>
-            {% endfor %}
-        </ul>
-    {% else %}
-        <div class="empty-lessons">
-            <p>No lessons available yet. Check back soon!</p>
-        </div>
+    {% if user.is_authenticated and progress.total %}
+        <p class="meta">Your progress: {{ progress.completed }}/{{ progress.total }} ({{ progress.percent }}%)</p>
     {% endif %}
-</div>
+</section>
+
+<section class="section">
+    <h2>Lessons</h2>
+    {% if lessons %}
+        <div class="lesson-list">
+            {% for lesson in lessons %}
+                <a class="lesson-item" href="{% url 'lesson_viewer' lesson.id %}">
+                    <div class="lesson-num">{{ lesson.order }}</div>
+                    <div>
+                        <h3>{{ lesson.title }}</h3>
+                        <p>{{ lesson.description|truncatewords:18 }}</p>
+                    </div>
+                    {% if lesson.id in completed_ids %}
+                        <span class="badge">Done</span>
+                    {% else %}
+                        <span class="btn btn-primary">Open viewer</span>
+                    {% endif %}
+                </a>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="empty">No lessons in this course yet.</p>
+    {% endif %}
+</section>
 {% endblock %}

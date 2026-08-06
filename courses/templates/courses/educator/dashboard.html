@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Educator dashboard — 3D Learning{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <h1>Educator dashboard</h1>
+    <p>Create, edit, and publish 3D learning content you own.</p>
+    <div class="actions">
+        <a class="btn btn-primary" href="{% url 'educator_course_create' %}">New course</a>
+        <a class="btn btn-secondary" href="{% url 'course_list' %}">Student catalog</a>
+        <a class="btn btn-secondary" href="{% url 'profile' %}">Account</a>
+    </div>
+</section>
+
+<section class="stats educator-stats">
+    <div class="stat">
+        <div class="number">{{ stats.courses }}</div>
+        <div class="label">Courses</div>
+    </div>
+    <div class="stat">
+        <div class="number">{{ stats.lessons }}</div>
+        <div class="label">Lessons</div>
+    </div>
+    <div class="stat">
+        <div class="number">{{ stats.with_models }}</div>
+        <div class="label">With 3D models</div>
+    </div>
+    <div class="stat">
+        <div class="number">{{ stats.hotspots }}</div>
+        <div class="label">Hotspots</div>
+    </div>
+</section>
+
+<section class="section">
+    <h2>Your courses</h2>
+    {% if courses %}
+        <div class="grid">
+            {% for course in courses %}
+                <div class="card educator-course-card">
+                    <a href="{% url 'educator_course_detail' course.id %}" class="card-link-block">
+                        {% if course.thumbnail %}
+                            <img class="card-thumb" src="{{ course.thumbnail.url }}" alt="">
+                        {% else %}
+                            <div class="card-thumb card-thumb-placeholder" aria-hidden="true"></div>
+                        {% endif %}
+                        <div class="card-body">
+                            <h3>{{ course.title }}</h3>
+                            <p>{{ course.description|truncatewords:20 }}</p>
+                            <div class="meta">
+                                <span>{{ course.lesson_count }} lesson{{ course.lesson_count|pluralize }}</span>
+                                <span>{{ course.hotspot_count }} hotspot{{ course.hotspot_count|pluralize }}</span>
+                                <span>{{ course.modeled_lessons }} with model{{ course.modeled_lessons|pluralize }}</span>
+                            </div>
+                        </div>
+                    </a>
+                    <div class="actions card-actions">
+                        <a class="btn btn-primary" href="{% url 'educator_course_detail' course.id %}">
+                            {% if course.lesson_count == 0 %}Add lessons{% else %}Manage lessons{% endif %}
+                        </a>
+                        <a class="btn btn-secondary" href="{% url 'educator_course_edit' course.id %}">Edit details</a>
+                        <form method="post" action="{% url 'educator_course_delete' course.id %}" onsubmit="return confirm('Delete this course and all its lessons?');">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-danger">Delete</button>
+                        </form>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <p class="empty">No courses yet. Create your first course to get started.</p>
+    {% endif %}
+</section>
+{% endblock %}

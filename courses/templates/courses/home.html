@@ -1,108 +1,93 @@
-{% extends 'courses/base.html' %}
+{% extends "base.html" %}
 
-{% block title %}Home - 3D Learning Platform{% endblock %}
-
-{% block extra_css %}
-<style>
-    .hero {
-        text-align: center;
-        padding: 80px 20px;
-        background: rgba(255, 255, 255, 0.60);
-        backdrop-filter: blur(15px);  
-        -webkit-backdrop-filter: blur(15px);
-        border-radius: 20px;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-        border: 1px solid rgba(255, 255, 255, 0);  
-    }
-    
-    .hero h1 {
-        font-size: 48px;
-        color: #667eea;
-        margin-bottom: 20px; 
-        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-        font-weight: bold;  
-    }
-    
-    .hero p {
-        font-size: 20px;
-        color: #1a1a1a;
-        margin-bottom: 40px;
-        max-width: 600px;
-        margin-left: auto;
-        margin-right: auto;
-        line-height: 1.6;
-        font-weight: 500
-    }
-    
-    .features {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: 30px;
-        margin-top: 60px;
-    }
-    
-    .feature-card {
-        background: rgba(255, 255, 255, 0.60);
-        padding: 30px;
-        border-radius: 15px;
-        text-align: center;
-        transition: transform 0.3s;
-    }
-    
-    .feature-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
-    }
-    
-    .feature-card .icon {
-        font-size: 48px;
-        margin-bottom: 15px;
-    }
-    
-    .feature-card h3 {
-        color: #667eea;
-        margin-bottom: 10px;
-        font-weight: bold; 
-    }
-    
-    .feature-card p {
-        color: #1a1a1a;
-        font-size: 14px;
-        font-weight: 500
-    }
-</style>
-{% endblock %}
+{% block title %}3D Learning Platform{% endblock %}
 
 {% block content %}
-<div class="hero">
-    <h1>🚁 Learn Engineering with 3D</h1>
-    <p>Explore complex engineering concepts through interactive 3D visualizations. Rotate, zoom, and understand how things really work!</p>
-    <a href="{% url 'course_list' %}" class="btn">🎓 Start Learning Now</a>
-</div>
+<section class="hero page-header">
+    <h1>Learn by exploring models in 3D</h1>
+    <p>
+        Open a course, load a lesson, and rotate the model yourself.
+        Hotspots call out the important parts as you look around.
+    </p>
+    <div class="actions">
+        <a class="btn btn-primary" href="{% url 'course_list' %}">Browse courses</a>
+        {% if user.is_authenticated %}
+            {% if is_educator %}
+                <a class="btn btn-secondary" href="{% url 'educator_dashboard' %}">Dashboard</a>
+            {% else %}
+                <a class="btn btn-secondary" href="{% url 'profile' %}">Your progress</a>
+            {% endif %}
+        {% else %}
+            <a class="btn btn-secondary" href="{% url 'signup' %}">Create an account</a>
+        {% endif %}
+    </div>
+</section>
 
-<div class="features">
-    <div class="feature-card">
-        <div class="icon">🎮</div>
-        <h3>Interactive 3D Models</h3>
-        <p>Rotate and explore models from every angle with intuitive mouse controls</p>
+{% if featured_courses %}
+<section class="section">
+    <h2>Featured courses</h2>
+    <div class="grid">
+        {% for course in featured_courses %}
+            <a class="card" href="{% url 'course_detail' course.id %}">
+                {% if course.thumbnail %}
+                    <img class="card-thumb" src="{{ course.thumbnail.url }}" alt="">
+                {% else %}
+                    <div class="card-thumb card-thumb-placeholder" aria-hidden="true"></div>
+                {% endif %}
+                <div class="card-body">
+                    <h3>{{ course.title }}</h3>
+                    <p>{{ course.description|truncatewords:18 }}</p>
+                    <div class="meta">
+                        <span>{{ course.lesson_count }} lesson{{ course.lesson_count|pluralize }}</span>
+                    </div>
+                    <span class="btn btn-primary">Open course</span>
+                </div>
+            </a>
+        {% endfor %}
     </div>
-    
-    <div class="feature-card">
-        <div class="icon">📚</div>
-        <h3>Structured Lessons</h3>
-        <p>Step-by-step courses designed to build your understanding progressively</p>
+</section>
+{% endif %}
+
+{% if demo_lesson %}
+<section class="section">
+    <h2>Try the demo</h2>
+    <a class="card" href="{% url 'lesson_viewer' demo_lesson.id %}" style="max-width:420px">
+        {% if demo_lesson.course.thumbnail %}
+            <img class="card-thumb" src="{{ demo_lesson.course.thumbnail.url }}" alt="">
+        {% else %}
+            <div class="card-thumb card-thumb-placeholder" aria-hidden="true"></div>
+        {% endif %}
+        <div class="card-body">
+            <h3>{{ demo_lesson.course.title }}</h3>
+            <p>{{ demo_lesson.title }} — open the sample model and hotspots right away.</p>
+            <div class="meta"><span>Ready to explore</span></div>
+            <span class="btn btn-primary">Open demo viewer</span>
+        </div>
+    </a>
+</section>
+{% endif %}
+
+<section class="section">
+    <h2>How it works</h2>
+    <div class="grid">
+        <div class="card">
+            <div class="card-body">
+                <h3>1. Pick a course</h3>
+                <p>Courses are lists of lessons, each with its own 3D model.</p>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-body">
+                <h3>2. Explore the model</h3>
+                <p>Drag to rotate, scroll to zoom, and click hotspots for details.</p>
+            </div>
+        </div>
+        <div class="card">
+            <div class="card-body">
+                <h3>3. Mark it done</h3>
+                <p>Log in if you want progress saved on your account.</p>
+            </div>
+        </div>
     </div>
-    
-    <div class="feature-card">
-        <div class="icon">⚡</div>
-        <h3>Real-World Applications</h3>
-        <p>Learn about drones, motors, transformers, and other engineering marvels</p>
-    </div>
-    
-    <div class="feature-card">
-        <div class="icon">🎯</div>
-        <h3>Self-Paced Learning</h3>
-        <p>Learn at your own speed, revisit lessons anytime you need</p>
-    </div>
-</div>
+</section>
 {% endblock %}

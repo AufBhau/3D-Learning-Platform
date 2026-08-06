@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}{{ page_title }} — Educator{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <a class="btn btn-secondary" href="{% url 'educator_course_detail' course.id %}">← {{ course.title }}</a>
+    <h1>{{ page_title }}</h1>
+    <p>
+        {% if lesson %}
+            Upload a .glb / .gltf model here, then place hotspots on the model.
+        {% else %}
+            Save the lesson first (you can upload a 3D model now). Hotspots are available right after save.
+        {% endif %}
+    </p>
+</section>
+
+<div class="form-panel">
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+            <ul class="error-list">
+                {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+            </ul>
+        {% endif %}
+        {% for field in form %}
+            <div class="form-group">
+                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.help_text %}
+                    <div class="help-text">{{ field.help_text }}</div>
+                {% endif %}
+                {% if field.errors %}
+                    <ul class="error-list">
+                        {% for error in field.errors %}<li>{{ error }}</li>{% endfor %}
+                    </ul>
+                {% endif %}
+            </div>
+        {% endfor %}
+        <button type="submit" class="btn btn-primary">Save lesson</button>
+    </form>
+    {% if lesson %}
+    <form method="post" action="{% url 'educator_lesson_delete' lesson.id %}" onsubmit="return confirm('Delete this lesson?');" style="margin-top:0.8rem;">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Delete lesson</button>
+    </form>
+    {% endif %}
+</div>
+
+{% if lesson %}
+<section class="section">
+    <h2>Hotspots</h2>
+    <div class="actions actions-spaced">
+        <a class="btn btn-primary" href="{% url 'educator_hotspot_create' lesson.id %}">Place hotspot on model</a>
+        <a class="btn btn-secondary" href="{% url 'lesson_viewer' lesson.id %}">Preview viewer</a>
+    </div>
+    {% with hotspots=lesson.annotations.all %}
+        {% if hotspots %}
+            <div class="lesson-list">
+                {% for hotspot in hotspots %}
+                    <div class="lesson-item">
+                        <div class="lesson-num">{{ hotspot.order }}</div>
+                        <div class="grow">
+                            <h3>{{ hotspot.title }}</h3>
+                            <p>
+                                {{ hotspot.description|default:"No description" }}
+                                · ({{ hotspot.position_x }}, {{ hotspot.position_y }}, {{ hotspot.position_z }})
+                            </p>
+                        </div>
+                        <div class="actions">
+                            <a class="btn btn-secondary" href="{% url 'educator_hotspot_edit' hotspot.id %}">Edit</a>
+                            <form method="post" action="{% url 'educator_hotspot_delete' hotspot.id %}" onsubmit="return confirm('Delete this hotspot?');">
+                                {% csrf_token %}
+                                <button type="submit" class="btn btn-danger">Delete</button>
+                            </form>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="empty">No hotspots yet. Add markers students can click in the viewer.</p>
+        {% endif %}
+    {% endwith %}
+</section>
+{% endif %}
+{% endblock %}

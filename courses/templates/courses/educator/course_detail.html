@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+
+{% block title %}{{ course.title }} — Educator{% endblock %}
+
+{% block content %}
+<section class="page-header">
+    <a class="btn btn-secondary" href="{% url 'educator_dashboard' %}">← Dashboard</a>
+    {% if course.thumbnail %}
+        <img class="course-hero-thumb" src="{{ course.thumbnail.url }}" alt="{{ course.title }}">
+    {% endif %}
+    <h1>{{ course.title }}</h1>
+    <p>{{ course.description }}</p>
+    <div class="actions">
+        <a class="btn btn-primary" href="{% url 'educator_lesson_create' course.id %}">Add lesson</a>
+        <a class="btn btn-secondary" href="{% url 'educator_course_edit' course.id %}">Edit course</a>
+        <a class="btn btn-secondary" href="{% url 'course_detail' course.id %}">Open as student</a>
+        <form method="post" action="{% url 'educator_course_delete' course.id %}" onsubmit="return confirm('Delete this course and all its lessons?');">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger">Delete course</button>
+        </form>
+    </div>
+</section>
+
+<section class="section">
+    <h2>Lessons</h2>
+    {% if lessons %}
+        <div class="lesson-list">
+            {% for lesson in lessons %}
+                <div class="lesson-item">
+                    <div class="lesson-num">{{ lesson.order }}</div>
+                    <div class="grow">
+                        <h3>{{ lesson.title }}</h3>
+                        <p>
+                            {{ lesson.description|truncatewords:16 }}
+                            · {{ lesson.hotspot_count }} hotspot{{ lesson.hotspot_count|pluralize }}
+                            {% if lesson.model_file %}· model uploaded{% else %}· no model yet{% endif %}
+                        </p>
+                    </div>
+                    <div class="actions">
+                        <a class="btn btn-secondary" href="{% url 'educator_lesson_edit' lesson.id %}">Edit</a>
+                        <a class="btn btn-primary" href="{% url 'lesson_viewer' lesson.id %}">Preview</a>
+                        <form method="post" action="{% url 'educator_lesson_delete' lesson.id %}" onsubmit="return confirm('Delete this lesson?');">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-danger">Delete</button>
+                        </form>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="empty-state">
+            <p class="empty">No lessons yet. Add a lesson, upload a .glb / .gltf model, then place hotspots.</p>
+            <a class="btn btn-primary" href="{% url 'educator_lesson_create' course.id %}">Add your first lesson</a>
+        </div>
+    {% endif %}
+</section>
+{% endblock %}
