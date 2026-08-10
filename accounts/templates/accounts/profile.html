@@ -27,26 +27,20 @@
 </section>
 
 <section class="section">
-    <h2>Switch role</h2>
+    <h2>Your role</h2>
     <p class="lead" style="margin-bottom:1rem">
-        Students learn from courses. Educators create courses, upload models, and place hotspots.
-    </p>
-    <div class="actions">
+        Your role was set when you created this account and cannot be changed here.
         {% if profile.is_educator %}
-            <form method="post">
-                {% csrf_token %}
-                <input type="hidden" name="quick_role" value="student">
-                <button type="submit" class="btn btn-secondary">Switch to student</button>
-            </form>
-            <a class="btn btn-primary" href="{% url 'educator_dashboard' %}">Open educator dashboard</a>
+            Create a separate student account if you want to learn without teaching tools.
         {% else %}
-            <form method="post">
-                {% csrf_token %}
-                <input type="hidden" name="quick_role" value="educator">
-                <button type="submit" class="btn btn-primary">Switch to educator</button>
-            </form>
+            Create a separate educator account if you want to publish courses.
         {% endif %}
-    </div>
+    </p>
+    {% if profile.is_educator %}
+        <div class="actions">
+            <a class="btn btn-primary" href="{% url 'educator_dashboard' %}">Open educator dashboard</a>
+        </div>
+    {% endif %}
 </section>
 
 <section class="section">

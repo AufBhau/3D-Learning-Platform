@@ -7,7 +7,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from .forms import SignUpForm
-from .models import Profile, get_or_create_profile, user_is_educator
+from .models import get_or_create_profile, user_is_educator
 
 
 def _default_redirect(user):
@@ -76,20 +76,6 @@ def profile_view(request):
     from courses.views import DEMO_COURSE_TITLE
 
     profile = get_or_create_profile(request.user)
-
-    if request.method == "POST":
-        quick_role = request.POST.get("quick_role")
-        if quick_role in {Profile.Role.STUDENT, Profile.Role.EDUCATOR}:
-            profile.role = quick_role
-            profile.save(update_fields=["role"])
-            messages.success(
-                request,
-                f"Switched to {profile.get_role_display()}.",
-            )
-            if profile.is_educator:
-                return redirect("educator_dashboard")
-            return redirect("profile")
-        return redirect("profile")
 
     courses = list(Course.objects.exclude(title=DEMO_COURSE_TITLE))
     course_cards = []

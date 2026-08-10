@@ -10,7 +10,7 @@ class SignUpForm(UserCreationForm):
         choices=Profile.Role.choices,
         initial=Profile.Role.STUDENT,
         widget=forms.RadioSelect,
-        help_text="Students learn. Educators create courses and upload 3D models.",
+        help_text="Students learn. Educators create courses and upload 3D models. This cannot be changed later.",
     )
 
     class Meta:
@@ -23,13 +23,3 @@ class SignUpForm(UserCreationForm):
         profile.role = self.cleaned_data["role"]
         profile.save()
         return user
-
-
-class RoleSwitchForm(forms.ModelForm):
-    class Meta:
-        model = Profile
-        fields = ["role"]
-        widgets = {"role": forms.RadioSelect}
-        help_texts = {
-            "role": "Switch between learning as a student and creating content as an educator.",
-        }

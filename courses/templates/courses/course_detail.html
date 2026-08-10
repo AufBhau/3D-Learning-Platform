@@ -22,14 +22,14 @@
             {% for lesson in lessons %}
                 <a class="lesson-item" href="{% url 'lesson_viewer' lesson.id %}">
                     <div class="lesson-num">{{ lesson.order }}</div>
-                    <div>
+                    <div class="lesson-item-body">
                         <h3>{{ lesson.title }}</h3>
                         <p>{{ lesson.description|truncatewords:18 }}</p>
                     </div>
                     {% if lesson.id in completed_ids %}
                         <span class="badge">Done</span>
                     {% else %}
-                        <span class="btn btn-primary">Open viewer</span>
+                        <span class="lesson-item-cta">Open viewer</span>
                     {% endif %}
                 </a>
             {% endfor %}
