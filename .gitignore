@@ -20,6 +20,10 @@ db.sqlite3-journal
 staticfiles/
 media/
 !media/.gitkeep
+!media/3d_models/
+!media/3d_models/**
+!media/course_thumbnails/
+!media/course_thumbnails/**
 !static/.gitkeep
 
 # Environment / secrets
