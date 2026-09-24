@@ -19,11 +19,11 @@
                 {% endif %}
                 <div class="card-body">
                     <h3>{{ course.title }}</h3>
-                    <p>{{ course.description|truncatewords:24 }}</p>
+                    <p>{{ course.description|truncatewords:16 }}</p>
                     <div class="meta">
                         <span>{{ course.lesson_count }} lesson{{ course.lesson_count|pluralize }}</span>
                     </div>
-                    <span class="btn btn-primary">Open course</span>
+                    <span class="card-cta">Open course →</span>
                 </div>
             </a>
         {% endfor %}

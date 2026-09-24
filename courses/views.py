@@ -43,17 +43,48 @@ def course_list(request):
 
 def course_detail(request, course_id):
     course = get_object_or_404(Course, id=course_id)
-    lessons = course.lessons.all()
+    lessons = list(
+        course.lessons.prefetch_related("annotations").all()
+    )
 
     completed_ids = set()
+    started_ids = set()
     if request.user.is_authenticated:
-        completed_ids = set(
-            StudentProgress.objects.filter(
-                student=request.user,
-                lesson__course=course,
-                completed=True,
-            ).values_list("lesson_id", flat=True)
+        progress_rows = StudentProgress.objects.filter(
+            student=request.user,
+            lesson__course=course,
+        ).values_list("lesson_id", "completed")
+        for lesson_id, completed in progress_rows:
+            started_ids.add(lesson_id)
+            if completed:
+                completed_ids.add(lesson_id)
+
+    flow_nodes = []
+    found_current = False
+    for index, lesson in enumerate(lessons):
+        hotspot_titles = [a.title for a in lesson.annotations.all()[:4]]
+        if lesson.id in completed_ids:
+            status = "done"
+        elif not found_current:
+            status = "current"
+            found_current = True
+        else:
+            status = "available"
+
+        flow_nodes.append(
+            {
+                "lesson": lesson,
+                "index": index + 1,
+                "status": status,
+                "hotspot_titles": hotspot_titles,
+                "viewer_url": reverse("lesson_viewer", args=[lesson.id]),
+            }
         )
+
+    active_node = next(
+        (n for n in flow_nodes if n["status"] == "current"),
+        flow_nodes[0] if flow_nodes else None,
+    )
 
     return render(
         request,
@@ -61,6 +92,8 @@ def course_detail(request, course_id):
         {
             "course": course,
             "lessons": lessons,
+            "flow_nodes": flow_nodes,
+            "active_node": active_node,
             "completed_ids": completed_ids,
             "progress": course.progress_for(request.user),
         },

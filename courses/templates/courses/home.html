@@ -36,11 +36,11 @@
                 {% endif %}
                 <div class="card-body">
                     <h3>{{ course.title }}</h3>
-                    <p>{{ course.description|truncatewords:18 }}</p>
+                    <p>{{ course.description|truncatewords:16 }}</p>
                     <div class="meta">
                         <span>{{ course.lesson_count }} lesson{{ course.lesson_count|pluralize }}</span>
                     </div>
-                    <span class="btn btn-primary">Open course</span>
+                    <span class="card-cta">Open course →</span>
                 </div>
             </a>
         {% endfor %}
@@ -61,7 +61,7 @@
             <h3>{{ demo_lesson.course.title }}</h3>
             <p>{{ demo_lesson.title }} — open the sample model and hotspots right away.</p>
             <div class="meta"><span>Ready to explore</span></div>
-            <span class="btn btn-primary">Open demo viewer</span>
+            <span class="card-cta">Open demo viewer →</span>
         </div>
     </a>
 </section>
