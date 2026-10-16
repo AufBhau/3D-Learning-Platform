@@ -38,7 +38,7 @@
                     </div>
                     <div class="actions">
                         <a class="btn btn-secondary" href="{% url 'educator_lesson_edit' lesson.id %}">Edit</a>
-                        <a class="btn btn-primary" href="{% url 'lesson_viewer' lesson.id %}">Preview</a>
+                        <a class="btn btn-primary" href="{% url 'lesson_viewer' lesson.id %}?from=educator">Preview</a>
                         <form method="post" action="{% url 'educator_lesson_delete' lesson.id %}" onsubmit="return confirm('Delete this lesson?');">
                             {% csrf_token %}
                             <button type="submit" class="btn btn-danger">Delete</button>

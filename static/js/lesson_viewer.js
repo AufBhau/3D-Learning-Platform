@@ -15,7 +15,10 @@
 
   const config = JSON.parse(configEl.textContent);
   let MODEL_URL = "";
+  let MODEL_ORIENTATION = { x: 0, y: 0, z: 0 };
+  let CAMERA_ZOOM = { distance: 1, min: 0.25, max: 6 };
   let ANNOTATIONS = [];
+  let baseFitDistance = 1;
 
   let scene;
   let camera;
@@ -32,6 +35,7 @@
   let selectedAnnotationId = null;
   const markerById = {};
   const labelEls = [];
+  let nameTagEl = null;
 
   function getCookie(name) {
     const match = document.cookie.match(new RegExp("(^| )" + name + "=([^;]+)"));
@@ -177,7 +181,6 @@
     fill.position.set(-4, 2, -3);
     scene.add(fill);
 
-    scene.add(annotationGroup);
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
     window.addEventListener("resize", onResize);
     animate();
@@ -197,6 +200,31 @@
       createAnnotationMarkers();
       window.setTimeout(hideLoading, 700);
     }
+  }
+
+  function applyModelOrientation(root) {
+    const deg = THREE.MathUtils.degToRad;
+    root.rotation.set(
+      deg(Number(MODEL_ORIENTATION.x) || 0),
+      deg(Number(MODEL_ORIENTATION.y) || 0),
+      deg(Number(MODEL_ORIENTATION.z) || 0)
+    );
+  }
+
+  function mountModel(object3d) {
+    if (currentModel) {
+      scene.remove(currentModel);
+    }
+    // Keep hotspots parented to the oriented root so they follow rotation edits.
+    if (annotationGroup.parent) {
+      annotationGroup.parent.remove(annotationGroup);
+    }
+    const root = new THREE.Group();
+    root.add(object3d);
+    root.add(annotationGroup);
+    applyModelOrientation(root);
+    scene.add(root);
+    currentModel = root;
   }
 
   function addPlaceholderModel() {
@@ -220,8 +248,7 @@
     dome.position.y = 0.25;
     group.add(body);
     group.add(dome);
-    scene.add(group);
-    currentModel = group;
+    mountModel(group);
   }
 
   function loadModel(url) {
@@ -229,9 +256,7 @@
     loader.load(
       url,
       function (gltf) {
-        if (currentModel) scene.remove(currentModel);
-        currentModel = gltf.scene;
-        scene.add(currentModel);
+        mountModel(gltf.scene);
         fitCameraToObject(currentModel);
         createAnnotationMarkers();
         hideLoading();
@@ -258,21 +283,44 @@
     const center = box.getCenter(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z) || 1;
     const fitDist = maxDim / (2 * Math.tan((Math.PI * camera.fov) / 360));
-    const distance = fitDist * 1.6;
+    baseFitDistance = fitDist * 1.6;
+
+    const distanceFactor = Math.max(Number(CAMERA_ZOOM.distance) || 1, 0.05);
+    let minFactor = Math.max(Number(CAMERA_ZOOM.min) || 0.25, 0.05);
+    let maxFactor = Math.max(Number(CAMERA_ZOOM.max) || 6, 0.1);
+    if (minFactor > maxFactor) {
+      const swap = minFactor;
+      minFactor = maxFactor;
+      maxFactor = swap;
+    }
+    const clampedDistance = Math.min(
+      Math.max(distanceFactor, minFactor),
+      maxFactor
+    );
+    const distance = baseFitDistance * clampedDistance;
 
     initialTarget.copy(center);
-    initialCameraPosition.set(
-      center.x + distance * 0.55,
-      center.y + distance * 0.35,
-      center.z + distance
-    );
+    const dir = new THREE.Vector3(0.55, 0.35, 1).normalize();
+    initialCameraPosition
+      .copy(center)
+      .add(dir.multiplyScalar(distance));
 
     camera.near = Math.max(distance / 100, 0.01);
     camera.far = Math.max(distance * 100, 100);
     camera.updateProjectionMatrix();
     camera.position.copy(initialCameraPosition);
     controls.target.copy(initialTarget);
+    controls.minDistance = baseFitDistance * minFactor;
+    controls.maxDistance = baseFitDistance * maxFactor;
     controls.update();
+  }
+
+  function ensureNameTag() {
+    if (nameTagEl) return nameTagEl;
+    nameTagEl = document.createElement("div");
+    nameTagEl.className = "hotspot-name-tag";
+    viewerEl.appendChild(nameTagEl);
+    return nameTagEl;
   }
 
   function createAnnotationMarkers() {
@@ -283,9 +331,17 @@
       el.remove();
     });
     labelEls.length = 0;
+    if (nameTagEl) {
+      nameTagEl.classList.remove("is-visible");
+    }
     Object.keys(markerById).forEach(function (key) {
       delete markerById[key];
     });
+
+    // Hotspots live in the oriented model root so they rotate with it.
+    if (currentModel && annotationGroup.parent !== currentModel) {
+      currentModel.add(annotationGroup);
+    }
 
     if (!ANNOTATIONS.length) return;
 
@@ -314,6 +370,8 @@
       label.className = "hotspot-label";
       label.textContent = String(index + 1);
       label.dataset.annotationId = String(annotation.id);
+      label.dataset.index = String(index + 1);
+      label.dataset.title = annotation.title || "Hotspot";
       label.setAttribute("aria-label", annotation.title || "Hotspot");
       label.addEventListener("click", function (event) {
         event.stopPropagation();
@@ -322,28 +380,40 @@
       viewerEl.appendChild(label);
       labelEls.push(label);
     });
+    ensureNameTag();
+    if (currentModel) {
+      currentModel.updateMatrixWorld(true);
+    }
   }
 
   function estimateMarkerScale() {
-    if (!currentModel) return 0.08;
+    // Size markers from the model only. An absolute minimum (e.g. 0.04) makes
+    // hotspots enormous on small/normalized GLBs.
+    if (!currentModel) return 0.03;
     const size = new THREE.Box3()
       .setFromObject(currentModel)
       .getSize(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z) || 1;
-    return Math.max(maxDim * 0.025, 0.04);
+    return maxDim * 0.008;
   }
 
   function updateLabels() {
     if (!labelEls.length) return;
     const width = viewerEl.clientWidth;
     const height = viewerEl.clientHeight;
+    const nameTag = ensureNameTag();
+    let activeScreen = null;
+    let activeTitle = "";
 
+    const worldPos = new THREE.Vector3();
     labelEls.forEach(function (label) {
       const id = Number(label.dataset.annotationId);
       const marker = markerById[id];
       if (!marker) return;
 
-      const pos = marker.position.clone().project(camera);
+      // Markers are children of the rotated model — project world position.
+      marker.getWorldPosition(worldPos);
+      const pos = worldPos.clone().project(camera);
       const visible =
         pos.z > -1 &&
         pos.z < 1 &&
@@ -359,11 +429,37 @@
 
       const x = (pos.x * 0.5 + 0.5) * width;
       const y = (-pos.y * 0.5 + 0.5) * height;
+      const isActive = id === selectedAnnotationId;
       label.style.display = "flex";
       label.style.transform =
         "translate(-50%, -50%) translate(" + x + "px," + y + "px)";
-      label.classList.toggle("is-active", id === selectedAnnotationId);
+      label.classList.toggle("is-active", isActive);
+      label.textContent = label.dataset.index;
+      if (isActive) {
+        activeScreen = { x: x, y: y };
+        activeTitle = label.dataset.title || "Hotspot";
+      }
     });
+
+    if (!activeScreen) {
+      nameTag.classList.remove("is-visible");
+      return;
+    }
+
+    // Place the name beside the marker so it does not cover the component.
+    nameTag.textContent = activeTitle;
+    nameTag.classList.add("is-visible");
+    const gap = 20;
+    let tagX = activeScreen.x + gap;
+    const tagY = activeScreen.y;
+    nameTag.style.transform =
+      "translate(0, -50%) translate(" + tagX + "px," + tagY + "px)";
+    const tagWidth = nameTag.offsetWidth || 140;
+    if (tagX + tagWidth > width - 10) {
+      tagX = activeScreen.x - gap;
+      nameTag.style.transform =
+        "translate(-100%, -50%) translate(" + tagX + "px," + tagY + "px)";
+    }
   }
 
   function showHotspotDetail(annotation) {
@@ -390,6 +486,27 @@
       .replace(/"/g, "&quot;");
   }
 
+  function scrollHotspotTextIntoView(id) {
+    const sidebar = document.getElementById("sidebar");
+    const activeItem = document.querySelector(
+      '.hotspot-list-item[data-annotation-id="' + id + '"]'
+    );
+    // Scroll to the matching list row (title + description). Fall back to detail.
+    const target = activeItem || hotspotDetailEl;
+    if (!sidebar || !target || target.hidden) return;
+
+    // Scroll the sidebar overflow container directly.
+    requestAnimationFrame(function () {
+      const sidebarTop = sidebar.getBoundingClientRect().top;
+      const targetTop = target.getBoundingClientRect().top;
+      const nextTop = sidebar.scrollTop + (targetTop - sidebarTop) - 12;
+      sidebar.scrollTo({
+        top: Math.max(0, nextTop),
+        behavior: "smooth",
+      });
+    });
+  }
+
   function focusAnnotation(id) {
     const annotation = ANNOTATIONS.find(function (item) {
       return item.id === id;
@@ -407,7 +524,10 @@
       );
     });
 
-    const endTarget = marker.position.clone();
+    scrollHotspotTextIntoView(id);
+
+    const endTarget = new THREE.Vector3();
+    marker.getWorldPosition(endTarget);
     const offset = camera.position.clone().sub(controls.target).normalize();
     const distance = camera.position.distanceTo(controls.target) || 3;
     const endPos = endTarget.clone().add(offset.multiplyScalar(distance));
@@ -530,6 +650,8 @@
   fetchLesson()
     .then(function (lesson) {
       MODEL_URL = lesson.model_url || "";
+      MODEL_ORIENTATION = lesson.model_orientation || { x: 0, y: 0, z: 0 };
+      CAMERA_ZOOM = lesson.camera_zoom || { distance: 1, min: 0.25, max: 6 };
       ANNOTATIONS = lesson.annotations || [];
       renderHotspotList(ANNOTATIONS);
       updateCompletionUI(Boolean(lesson.completed));

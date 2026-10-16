@@ -1,6 +1,113 @@
 {% extends "base.html" %}
+{% load static %}
 
 {% block title %}{{ page_title }} — Educator{% endblock %}
+
+{% block extra_css %}
+<style>
+    .lesson-editor {
+        display: grid;
+        grid-template-columns: minmax(280px, 520px) minmax(280px, 1fr);
+        gap: 1.25rem;
+        align-items: start;
+    }
+    .orientation-preview-panel {
+        background: rgba(18, 26, 43, 0.92);
+        border: 1px solid var(--panel-border);
+        border-radius: 1rem;
+        padding: 1.1rem 1.15rem 1.25rem;
+        box-shadow: var(--shadow);
+        position: sticky;
+        top: 1rem;
+    }
+    .orientation-preview-panel h2 {
+        font-size: 1.1rem;
+        margin-bottom: 0.35rem;
+    }
+    .orientation-preview-panel .lead {
+        color: var(--muted);
+        font-size: 0.9rem;
+        margin-bottom: 0.85rem;
+    }
+    #orientation-preview {
+        position: relative;
+        width: 100%;
+        height: min(420px, 55vh);
+        border-radius: 0.85rem;
+        overflow: hidden;
+        border: 1px solid var(--panel-border);
+        background: #080e1a;
+    }
+    #orientation-preview.is-model-mode {
+        cursor: grab;
+    }
+    #orientation-preview.is-model-mode:active {
+        cursor: grabbing;
+    }
+    #orientation-mode-model.is-active,
+    #orientation-mode-orbit.is-active {
+        background: var(--accent-soft, rgba(45, 212, 191, 0.16));
+        border-color: rgba(45, 212, 191, 0.45);
+        color: var(--accent, #2dd4bf);
+    }
+    #orientation-preview canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+    }
+    #orientation-loading {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.65rem;
+        background: rgba(8, 14, 26, 0.82);
+        color: var(--muted);
+        font-size: 0.9rem;
+    }
+    #orientation-loading .loader {
+        width: 2rem;
+        height: 2rem;
+        border: 3px solid rgba(148, 163, 184, 0.25);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .orientation-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+        margin-top: 0.85rem;
+    }
+    #orientation-status {
+        margin-top: 0.7rem;
+        color: var(--muted);
+        font-size: 0.85rem;
+        min-height: 1.2em;
+    }
+    .axis-hint {
+        margin-top: 0.55rem;
+        color: var(--muted);
+        font-size: 0.8rem;
+    }
+    .axis-hint span { font-weight: 600; }
+    .axis-hint .x { color: #f87171; }
+    .axis-hint .y { color: #4ade80; }
+    .axis-hint .z { color: #60a5fa; }
+    @media (max-width: 900px) {
+        .lesson-editor {
+            grid-template-columns: 1fr;
+        }
+        .orientation-preview-panel {
+            position: static;
+        }
+    }
+</style>
+{% endblock %}
 
 {% block content %}
 <section class="page-header">
@@ -8,43 +115,81 @@
     <h1>{{ page_title }}</h1>
     <p>
         {% if lesson %}
-            Upload a .glb / .gltf model here, then place hotspots on the model.
+            Upload a .glb / .gltf model here, set default orientation in the live preview, then place hotspots.
         {% else %}
-            Save the lesson first (you can upload a 3D model now). Hotspots are available right after save.
+            Save the lesson with a model, then use the preview to fix orientation before placing hotspots.
         {% endif %}
     </p>
 </section>
 
-<div class="form-panel">
-    <form method="post" enctype="multipart/form-data">
-        {% csrf_token %}
-        {% if form.non_field_errors %}
-            <ul class="error-list">
-                {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
-            </ul>
+<div class="lesson-editor">
+    <div class="form-panel">
+        <form method="post" enctype="multipart/form-data" id="lesson-form">
+            {% csrf_token %}
+            {% if form.non_field_errors %}
+                <ul class="error-list">
+                    {% for error in form.non_field_errors %}<li>{{ error }}</li>{% endfor %}
+                </ul>
+            {% endif %}
+            {% for field in form %}
+                <div class="form-group">
+                    <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+                    {{ field }}
+                    {% if field.help_text %}
+                        <div class="help-text">{{ field.help_text }}</div>
+                    {% endif %}
+                    {% if field.errors %}
+                        <ul class="error-list">
+                            {% for error in field.errors %}<li>{{ error }}</li>{% endfor %}
+                        </ul>
+                    {% endif %}
+                </div>
+            {% endfor %}
+            <button type="submit" class="btn btn-primary" id="lock-orientation-save">
+                Lock orientation &amp; zoom &amp; save
+            </button>
+        </form>
+        {% if lesson %}
+        <form method="post" action="{% url 'educator_lesson_delete' lesson.id %}" onsubmit="return confirm('Delete this lesson?');" style="margin-top:0.8rem;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger">Delete lesson</button>
+        </form>
         {% endif %}
-        {% for field in form %}
-            <div class="form-group">
-                <label for="{{ field.id_for_label }}">{{ field.label }}</label>
-                {{ field }}
-                {% if field.help_text %}
-                    <div class="help-text">{{ field.help_text }}</div>
-                {% endif %}
-                {% if field.errors %}
-                    <ul class="error-list">
-                        {% for error in field.errors %}<li>{{ error }}</li>{% endfor %}
-                    </ul>
-                {% endif %}
+    </div>
+
+    <aside class="orientation-preview-panel">
+        <h2>Orientation preview</h2>
+        <p class="lead">Drag to rotate, scroll to zoom, then lock orientation and zoom limits before saving.</p>
+        <div class="orientation-toolbar" style="margin-top:0;margin-bottom:0.75rem;">
+            <button type="button" class="btn btn-primary is-active" id="orientation-mode-model">Rotate model</button>
+            <button type="button" class="btn btn-secondary" id="orientation-mode-orbit">Orbit camera</button>
+        </div>
+        <div id="orientation-preview" class="is-model-mode">
+            <div id="orientation-loading">
+                <div class="loader"></div>
+                <p>Loading model…</p>
             </div>
-        {% endfor %}
-        <button type="submit" class="btn btn-primary">Save lesson</button>
-    </form>
-    {% if lesson %}
-    <form method="post" action="{% url 'educator_lesson_delete' lesson.id %}" onsubmit="return confirm('Delete this lesson?');" style="margin-top:0.8rem;">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-danger">Delete lesson</button>
-    </form>
-    {% endif %}
+        </div>
+        <div class="orientation-toolbar">
+            <button type="button" class="btn btn-primary" id="orientation-lock">Lock &amp; save</button>
+            <button type="button" class="btn btn-secondary" id="zoom-lock-default">Lock zoom</button>
+            <button type="button" class="btn btn-secondary" id="zoom-lock-min">Lock closest</button>
+            <button type="button" class="btn btn-secondary" id="zoom-lock-max">Lock farthest</button>
+            <button type="button" class="btn btn-secondary" id="orientation-reset">Reset 0°</button>
+            <button type="button" class="btn btn-secondary" data-orient-axis="x" data-orient-nudge="90">+90° X</button>
+            <button type="button" class="btn btn-secondary" data-orient-axis="x" data-orient-nudge="-90">-90° X</button>
+            <button type="button" class="btn btn-secondary" data-orient-axis="y" data-orient-nudge="90">+90° Y</button>
+            <button type="button" class="btn btn-secondary" data-orient-axis="y" data-orient-nudge="-90">-90° Y</button>
+            <button type="button" class="btn btn-secondary" data-orient-axis="z" data-orient-nudge="90">+90° Z</button>
+            <button type="button" class="btn btn-secondary" data-orient-axis="z" data-orient-nudge="-90">-90° Z</button>
+        </div>
+        <p class="axis-hint">
+            <span class="x">Red = X</span> ·
+            <span class="y">Green = Y</span> ·
+            <span class="z">Blue = Z</span>
+        </p>
+        <p id="orientation-status"></p>
+    </aside>
 </div>
 
 {% if lesson %}
@@ -52,7 +197,7 @@
     <h2>Hotspots</h2>
     <div class="actions actions-spaced">
         <a class="btn btn-primary" href="{% url 'educator_hotspot_create' lesson.id %}">Place hotspot on model</a>
-        <a class="btn btn-secondary" href="{% url 'lesson_viewer' lesson.id %}">Preview viewer</a>
+        <a class="btn btn-secondary" href="{% url 'lesson_viewer' lesson.id %}?from=educator">Preview viewer</a>
     </div>
     {% with hotspots=lesson.annotations.all %}
         {% if hotspots %}
@@ -69,7 +214,7 @@
                         </div>
                         <div class="actions">
                             <a class="btn btn-secondary" href="{% url 'educator_hotspot_edit' hotspot.id %}">Edit</a>
-                            <form method="post" action="{% url 'educator_hotspot_delete' hotspot.id %}" onsubmit="return confirm('Delete this hotspot?');">
+                            <form method="post" action="{% url 'educator_hotspot_delete' hotspot.id %}" onsubmit="return confirm('Delete hotspot?');">
                                 {% csrf_token %}
                                 <button type="submit" class="btn btn-danger">Delete</button>
                             </form>
@@ -83,4 +228,13 @@
     {% endwith %}
 </section>
 {% endif %}
+
+{{ orientation_config|json_script:"orientation-config" }}
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="{% static 'js/orientation_preview.js' %}?v=4"></script>
 {% endblock %}

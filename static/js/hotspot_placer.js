@@ -12,6 +12,8 @@
   }
 
   const config = JSON.parse(configEl.textContent);
+  const MODEL_ORIENTATION = config.modelOrientation || { x: 0, y: 0, z: 0 };
+  const CAMERA_ZOOM = config.cameraZoom || { distance: 1, min: 0.25, max: 6 };
   const inputX = document.getElementById("id_position_x");
   const inputY = document.getElementById("id_position_y");
   const inputZ = document.getElementById("id_position_z");
@@ -71,12 +73,13 @@
   }
 
   function estimateMarkerScale() {
-    if (!currentModel) return 0.08;
+    // Match the lesson viewer: relative to model size only (no large absolute min).
+    if (!currentModel) return 0.03;
     const size = new THREE.Box3()
       .setFromObject(currentModel)
       .getSize(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z) || 1;
-    return Math.max(maxDim * 0.03, 0.05);
+    return maxDim * 0.008;
   }
 
   function ensurePreviewMarker() {
@@ -109,6 +112,10 @@
     }
     previewMarker = null;
 
+    if (currentModel && annotationGroup.parent !== currentModel) {
+      currentModel.add(annotationGroup);
+    }
+
     const scale = estimateMarkerScale();
     const editingId = config.editingId;
     (config.annotations || []).forEach(function (annotation) {
@@ -131,6 +138,9 @@
       );
       annotationGroup.add(marker);
     });
+    if (currentModel) {
+      currentModel.updateMatrixWorld(true);
+    }
   }
 
   function initScene() {
@@ -164,8 +174,6 @@
     fill.position.set(-4, 2, -3);
     scene.add(fill);
 
-    scene.add(annotationGroup);
-
     renderer.domElement.addEventListener("pointerdown", onPointerDown);
     renderer.domElement.addEventListener("pointerup", onPointerUp);
     window.addEventListener("resize", onResize);
@@ -190,24 +198,55 @@
     const center = box.getCenter(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z) || 1;
 
-    // Frame tightly so small / large models both fill the view
     const fitHeightDistance =
       maxDim / (2 * Math.tan((Math.PI * camera.fov) / 360));
     const fitWidthDistance = fitHeightDistance / camera.aspect;
-    const distance = Math.max(fitHeightDistance, fitWidthDistance) * 1.15;
+    const baseFit = Math.max(fitHeightDistance, fitWidthDistance) * 1.15;
+
+    const distanceFactor = Math.max(Number(CAMERA_ZOOM.distance) || 1, 0.05);
+    let minFactor = Math.max(Number(CAMERA_ZOOM.min) || 0.25, 0.05);
+    let maxFactor = Math.max(Number(CAMERA_ZOOM.max) || 6, 0.1);
+    if (minFactor > maxFactor) {
+      const swap = minFactor;
+      minFactor = maxFactor;
+      maxFactor = swap;
+    }
+    const clamped = Math.min(Math.max(distanceFactor, minFactor), maxFactor);
+    const distance = baseFit * clamped;
 
     camera.near = Math.max(distance / 100, 0.01);
     camera.far = Math.max(distance * 100, 100);
     camera.updateProjectionMatrix();
-    camera.position.set(
-      center.x + distance * 0.45,
-      center.y + distance * 0.28,
-      center.z + distance
-    );
+    const dir = new THREE.Vector3(0.45, 0.28, 1).normalize();
+    camera.position.copy(center).add(dir.multiplyScalar(distance));
     controls.target.copy(center);
-    controls.minDistance = maxDim * 0.2;
-    controls.maxDistance = distance * 8;
+    controls.minDistance = baseFit * minFactor;
+    controls.maxDistance = baseFit * maxFactor;
     controls.update();
+  }
+
+  function applyModelOrientation(root) {
+    const deg = THREE.MathUtils.degToRad;
+    root.rotation.set(
+      deg(Number(MODEL_ORIENTATION.x) || 0),
+      deg(Number(MODEL_ORIENTATION.y) || 0),
+      deg(Number(MODEL_ORIENTATION.z) || 0)
+    );
+  }
+
+  function mountModel(object3d) {
+    if (currentModel) {
+      scene.remove(currentModel);
+    }
+    if (annotationGroup.parent) {
+      annotationGroup.parent.remove(annotationGroup);
+    }
+    const root = new THREE.Group();
+    root.add(object3d);
+    root.add(annotationGroup);
+    applyModelOrientation(root);
+    scene.add(root);
+    currentModel = root;
   }
 
   function addPlaceholderModel() {
@@ -231,8 +270,7 @@
     dome.position.y = 0.25;
     group.add(body);
     group.add(dome);
-    scene.add(group);
-    currentModel = group;
+    mountModel(group);
   }
 
   function afterModelReady() {
@@ -252,9 +290,7 @@
     loader.load(
       url,
       function (gltf) {
-        if (currentModel) scene.remove(currentModel);
-        currentModel = gltf.scene;
-        scene.add(currentModel);
+        mountModel(gltf.scene);
         hideLoading();
         afterModelReady();
       },
@@ -311,7 +347,8 @@
       return;
     }
 
-    const point = hits[0].point;
+    // Store local coords on the oriented root so hotspots follow model rotation.
+    const point = currentModel.worldToLocal(hits[0].point.clone());
     writeCoords(point.x, point.y, point.z);
     movePreview(point.x, point.y, point.z);
   }
