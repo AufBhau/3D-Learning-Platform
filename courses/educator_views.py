@@ -143,6 +143,10 @@ def lesson_create(request, course_id):
             "form": form,
             "course": course,
             "page_title": "New lesson",
+            "orientation_config": {
+                "modelUrl": "",
+                "cameraZoom": {"distance": 1.0, "min": 0.25, "max": 6.0},
+            },
         },
     )
 
@@ -173,6 +177,10 @@ def lesson_edit(request, lesson_id):
             "course": lesson.course,
             "lesson": lesson,
             "page_title": "Edit lesson",
+            "orientation_config": {
+                "modelUrl": lesson.model_url or "",
+                "cameraZoom": lesson.camera_zoom,
+            },
         },
     )
 
@@ -208,6 +216,8 @@ def _hotspot_placer_config(lesson, hotspot=None):
         }
     return {
         "modelUrl": lesson.model_url or "",
+        "modelOrientation": lesson.model_orientation,
+        "cameraZoom": lesson.camera_zoom,
         "annotations": annotations,
         "editingId": hotspot.id if hotspot else None,
         "initialPosition": initial,
@@ -220,7 +230,7 @@ def hotspot_create(request, lesson_id):
     next_order = (lesson.annotations.aggregate(m=Max("order")).get("m") or 0) + 1
 
     if request.method == "POST":
-        form = AnnotationForm(request.POST)
+        form = AnnotationForm(request.POST, lesson=lesson)
         if form.is_valid():
             hotspot = form.save(commit=False)
             hotspot.lesson = lesson
@@ -236,7 +246,8 @@ def hotspot_create(request, lesson_id):
                 "position_x": 0,
                 "position_y": 0,
                 "position_z": 0,
-            }
+            },
+            lesson=lesson,
         )
 
     return render(
@@ -259,7 +270,7 @@ def hotspot_edit(request, hotspot_id):
     lesson = hotspot.lesson
 
     if request.method == "POST":
-        form = AnnotationForm(request.POST, instance=hotspot)
+        form = AnnotationForm(request.POST, instance=hotspot, lesson=lesson)
         if form.is_valid():
             form.save()
             messages.success(request, f'Hotspot "{hotspot.title}" updated.')
@@ -267,7 +278,7 @@ def hotspot_edit(request, hotspot_id):
                 return redirect("educator_hotspot_create", lesson_id=lesson.id)
             return redirect("educator_lesson_edit", lesson_id=lesson.id)
     else:
-        form = AnnotationForm(instance=hotspot)
+        form = AnnotationForm(instance=hotspot, lesson=lesson)
 
     return render(
         request,

@@ -1,6 +1,6 @@
-from django.db import models
 from django.contrib.auth.models import User
 from django.core.validators import FileExtensionValidator
+from django.db import IntegrityError, models, transaction
 
 
 class Course(models.Model):
@@ -66,6 +66,30 @@ class Lesson(models.Model):
         blank=True,
         help_text="Guide for students while exploring the model",
     )
+    model_rotation_x = models.FloatField(
+        default=0,
+        help_text="Default model tilt around X, in degrees (e.g. 90).",
+    )
+    model_rotation_y = models.FloatField(
+        default=0,
+        help_text="Default model turn around Y, in degrees (e.g. 90).",
+    )
+    model_rotation_z = models.FloatField(
+        default=0,
+        help_text="Default model roll around Z, in degrees (e.g. 90).",
+    )
+    camera_distance_factor = models.FloatField(
+        default=1.0,
+        help_text="Default zoom vs auto-fit (1 = fitted, smaller = closer).",
+    )
+    camera_min_distance_factor = models.FloatField(
+        default=0.25,
+        help_text="Closest allowed zoom vs auto-fit (zoom in limit).",
+    )
+    camera_max_distance_factor = models.FloatField(
+        default=6.0,
+        help_text="Farthest allowed zoom vs auto-fit (zoom out limit).",
+    )
 
     class Meta:
         ordering = ["course", "order"]
@@ -79,6 +103,22 @@ class Lesson(models.Model):
         if self.model_file:
             return self.model_file.url
         return ""
+
+    @property
+    def model_orientation(self):
+        return {
+            "x": self.model_rotation_x,
+            "y": self.model_rotation_y,
+            "z": self.model_rotation_z,
+        }
+
+    @property
+    def camera_zoom(self):
+        return {
+            "distance": self.camera_distance_factor,
+            "min": self.camera_min_distance_factor,
+            "max": self.camera_max_distance_factor,
+        }
 
 
 class StudentProgress(models.Model):
@@ -103,6 +143,15 @@ class StudentProgress(models.Model):
     def __str__(self):
         return f"{self.student.username} - {self.lesson.title}"
 
+    @classmethod
+    def get_or_create_for(cls, student, lesson):
+        """Race-safe get_or_create for the (student, lesson) unique pair."""
+        try:
+            with transaction.atomic():
+                return cls.objects.get_or_create(student=student, lesson=lesson)
+        except IntegrityError:
+            return cls.objects.get(student=student, lesson=lesson), False
+
 
 class Annotation(models.Model):
     lesson = models.ForeignKey(
@@ -119,6 +168,7 @@ class Annotation(models.Model):
 
     class Meta:
         ordering = ["lesson", "order"]
+        unique_together = ["lesson", "order"]
 
     def __str__(self):
         return f"{self.lesson.title} - {self.title}"

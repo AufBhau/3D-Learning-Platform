@@ -86,6 +86,14 @@ def course_detail(request, course_id):
         flow_nodes[0] if flow_nodes else None,
     )
 
+    total = len(lessons)
+    completed = len(completed_ids)
+    progress = {
+        "total": total,
+        "completed": completed,
+        "percent": int(round((completed / total) * 100)) if total else 0,
+    }
+
     return render(
         request,
         "courses/course_detail.html",
@@ -95,7 +103,7 @@ def course_detail(request, course_id):
             "flow_nodes": flow_nodes,
             "active_node": active_node,
             "completed_ids": completed_ids,
-            "progress": course.progress_for(request.user),
+            "progress": progress,
         },
     )
 
@@ -103,6 +111,8 @@ def course_detail(request, course_id):
 @ensure_csrf_cookie
 def lesson_viewer(request, lesson_id):
     """Page shell for the 3D viewer. Model/hotspots load from the DRF API."""
+    from accounts.models import user_is_educator
+
     lesson = get_object_or_404(
         Lesson.objects.select_related("course"),
         id=lesson_id,
@@ -115,6 +125,32 @@ def lesson_viewer(request, lesson_id):
             student=request.user,
             lesson=lesson,
         ).first()
+
+    # Educators previewing from dashboard should return to edit flows, not student pages.
+    educator_return = None
+    if (
+        request.GET.get("from") == "educator"
+        and request.user.is_authenticated
+        and user_is_educator(request.user)
+        and lesson.course.owner_id == request.user.id
+    ):
+        educator_return = {
+            "lesson_edit_url": reverse("educator_lesson_edit", args=[lesson.id]),
+            "course_detail_url": reverse(
+                "educator_course_detail", args=[lesson.course_id]
+            ),
+        }
+
+    next_lesson = (
+        Lesson.objects.filter(course=lesson.course, order__gt=lesson.order)
+        .order_by("order")
+        .first()
+    )
+    next_lesson_url = None
+    if next_lesson:
+        next_lesson_url = reverse("lesson_viewer", args=[next_lesson.id])
+        if educator_return:
+            next_lesson_url = f"{next_lesson_url}?from=educator"
 
     viewer_config = {
         "lessonId": lesson.id,
@@ -131,6 +167,9 @@ def lesson_viewer(request, lesson_id):
             "course": lesson.course,
             "progress": progress,
             "viewer_config": viewer_config,
+            "educator_return": educator_return,
+            "next_lesson": next_lesson,
+            "next_lesson_url": next_lesson_url,
         },
     )
 
@@ -140,10 +179,7 @@ def lesson_viewer(request, lesson_id):
 def mark_complete(request, lesson_id):
     """Kept for non-JS fallback; viewer prefers the DRF complete endpoint."""
     lesson = get_object_or_404(Lesson, id=lesson_id)
-    progress, _ = StudentProgress.objects.get_or_create(
-        student=request.user,
-        lesson=lesson,
-    )
+    progress, _ = StudentProgress.get_or_create_for(request.user, lesson)
 
     action = request.POST.get("action")
     if action == "complete":
@@ -156,5 +192,7 @@ def mark_complete(request, lesson_id):
         progress.completed_at = None
         progress.save()
         messages.info(request, f'Lesson "{lesson.title}" marked as incomplete.')
+    else:
+        messages.error(request, "Unknown progress action.")
 
     return redirect("lesson_viewer", lesson_id=lesson.id)

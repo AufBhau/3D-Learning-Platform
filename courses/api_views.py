@@ -44,10 +44,7 @@ class MarkLessonCompleteAPIView(APIView):
         serializer = MarkCompleteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        progress, _ = StudentProgress.objects.get_or_create(
-            student=request.user,
-            lesson=lesson,
-        )
+        progress, _ = StudentProgress.get_or_create_for(request.user, lesson)
         action = serializer.validated_data["action"]
 
         if action == "complete":

@@ -2,8 +2,9 @@ import json
 import struct
 from pathlib import Path
 
+from django.conf import settings
 from django.core.files import File
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 
 from courses.models import Annotation, Course, Lesson
 
@@ -150,7 +151,21 @@ def build_box_glb() -> bytes:
 class Command(BaseCommand):
     help = "Create a demo course, lesson, sample .glb, and hotspots."
 
+    def add_arguments(self, parser):
+        parser.add_argument(
+            "--force",
+            action="store_true",
+            help="Allow running when DEBUG is False and overwrite demo_box.glb.",
+        )
+
     def handle(self, *args, **options):
+        force = options["force"]
+        if not settings.DEBUG and not force:
+            raise CommandError(
+                "Refusing to seed demo data when DEBUG is False. "
+                "Re-run with --force if you really intend this."
+            )
+
         course, _ = Course.objects.get_or_create(
             title="Demo: Explore a Box",
             defaults={
@@ -177,10 +192,11 @@ class Command(BaseCommand):
             },
         )
 
-        sample_dir = Path("media") / "3d_models"
+        sample_dir = Path(settings.MEDIA_ROOT) / "3d_models"
         sample_dir.mkdir(parents=True, exist_ok=True)
         sample_path = sample_dir / "demo_box.glb"
-        sample_path.write_bytes(build_box_glb())
+        if force or not sample_path.exists():
+            sample_path.write_bytes(build_box_glb())
 
         if not lesson.model_file:
             with sample_path.open("rb") as handle:

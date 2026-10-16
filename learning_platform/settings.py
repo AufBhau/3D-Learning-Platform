@@ -147,11 +147,25 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
+# Upload caps (request body + per-field checks in forms/serializers).
+DATA_UPLOAD_MAX_MEMORY_SIZE = int(env("DJANGO_DATA_UPLOAD_MAX_MEMORY_SIZE", str(25 * 1024 * 1024)))
+FILE_UPLOAD_MAX_MEMORY_SIZE = DATA_UPLOAD_MAX_MEMORY_SIZE
+MAX_LESSON_MODEL_BYTES = int(env("DJANGO_MAX_LESSON_MODEL_BYTES", str(20 * 1024 * 1024)))
+MAX_COURSE_THUMBNAIL_BYTES = int(
+    env("DJANGO_MAX_COURSE_THUMBNAIL_BYTES", str(2 * 1024 * 1024))
+)
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 LOGIN_REDIRECT_URL = "home"
 LOGOUT_REDIRECT_URL = "home"
 LOGIN_URL = "login"
+
+_drf_renderers = [
+    "rest_framework.renderers.JSONRenderer",
+]
+if DEBUG or _running_tests:
+    _drf_renderers.append("rest_framework.renderers.BrowsableAPIRenderer")
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
@@ -160,10 +174,7 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.AllowAny",
     ],
-    "DEFAULT_RENDERER_CLASSES": [
-        "rest_framework.renderers.JSONRenderer",
-        "rest_framework.renderers.BrowsableAPIRenderer",
-    ],
+    "DEFAULT_RENDERER_CLASSES": _drf_renderers,
 }
 
 if not DEBUG and not _running_tests:

@@ -35,15 +35,16 @@ def ensure_user_profile(sender, instance, created, **kwargs):
 
 
 def get_or_create_profile(user):
+    """Return the user's profile, caching on the user for the request.
+
+    Always load via get_or_create on first access so we do not trust a stale
+    reverse OneToOne cache (e.g. after the create-user signal or a role update).
+    """
     cached = getattr(user, "_cached_profile", None)
     if cached is not None:
         return cached
 
-    try:
-        profile = user.profile
-    except Profile.DoesNotExist:
-        profile, _ = Profile.objects.get_or_create(user=user)
-
+    profile, _ = Profile.objects.get_or_create(user=user)
     user._cached_profile = profile
     return profile
 

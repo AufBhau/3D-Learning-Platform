@@ -28,3 +28,14 @@ class ProfileCacheTests(TestCase):
         with self.assertNumQueries(0):
             second = get_or_create_profile(user)
         self.assertIs(first, second)
+
+
+class EducatorGateMessageTests(TestCase):
+    def test_student_sees_admin_grant_message(self):
+        user = User.objects.create_user("plain", password="pass12345")
+        self.client.force_login(user)
+        response = self.client.get(reverse("educator_dashboard"), follow=True)
+        self.assertContains(
+            response,
+            "Ask an administrator to grant educator access",
+        )

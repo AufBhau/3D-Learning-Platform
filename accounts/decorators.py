@@ -14,7 +14,7 @@ def educator_required(view_func):
         if not user_is_educator(request.user):
             messages.error(
                 request,
-                "Educator access required. Sign up as an educator to use the dashboard.",
+                "Educator access required. Ask an administrator to grant educator access.",
             )
             return redirect("home")
         return view_func(request, *args, **kwargs)

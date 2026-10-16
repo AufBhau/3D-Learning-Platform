@@ -1,6 +1,15 @@
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from .models import Annotation, Course, Lesson, StudentProgress
+from .validators import validate_course_thumbnail_size, validate_lesson_model_size
+
+
+def _drf_file_size(validate_fn, value):
+    try:
+        return validate_fn(value)
+    except DjangoValidationError as exc:
+        raise serializers.ValidationError(exc.messages) from exc
 
 
 class AnnotationSerializer(serializers.ModelSerializer):
@@ -21,6 +30,8 @@ class LessonListSerializer(serializers.ModelSerializer):
 
 class LessonDetailSerializer(serializers.ModelSerializer):
     model_url = serializers.SerializerMethodField()
+    model_orientation = serializers.SerializerMethodField()
+    camera_zoom = serializers.SerializerMethodField()
     annotations = AnnotationSerializer(many=True, read_only=True)
     course_id = serializers.IntegerField(source="course.id", read_only=True)
     course_title = serializers.CharField(source="course.title", read_only=True)
@@ -35,6 +46,8 @@ class LessonDetailSerializer(serializers.ModelSerializer):
             "order",
             "interaction_guide",
             "model_url",
+            "model_orientation",
+            "camera_zoom",
             "annotations",
             "course_id",
             "course_title",
@@ -43,6 +56,12 @@ class LessonDetailSerializer(serializers.ModelSerializer):
 
     def get_model_url(self, obj):
         return obj.model_url
+
+    def get_model_orientation(self, obj):
+        return obj.model_orientation
+
+    def get_camera_zoom(self, obj):
+        return obj.camera_zoom
 
     def get_completed(self, obj):
         request = self.context.get("request")
@@ -133,6 +152,9 @@ class EducatorCourseSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id", "lesson_count", "created_at", "updated_at"]
 
+    def validate_thumbnail(self, value):
+        return _drf_file_size(validate_course_thumbnail_size, value)
+
 
 class EducatorLessonSerializer(serializers.ModelSerializer):
     model_url = serializers.SerializerMethodField(read_only=True)
@@ -148,10 +170,18 @@ class EducatorLessonSerializer(serializers.ModelSerializer):
             "order",
             "model_file",
             "model_url",
+            "model_rotation_x",
+            "model_rotation_y",
+            "model_rotation_z",
+            "camera_distance_factor",
+            "camera_min_distance_factor",
+            "camera_max_distance_factor",
             "interaction_guide",
             "hotspot_count",
         ]
         read_only_fields = ["id", "model_url", "hotspot_count"]
+        # Prefer validate() field error over default UniqueTogetherValidator wording.
+        validators = []
 
     def get_model_url(self, obj):
         return obj.model_url
@@ -161,6 +191,26 @@ class EducatorLessonSerializer(serializers.ModelSerializer):
         if request and course.owner_id != request.user.id:
             raise serializers.ValidationError("You can only add lessons to your own courses.")
         return course
+
+    def validate_model_file(self, value):
+        return _drf_file_size(validate_lesson_model_size, value)
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        course = attrs.get("course") or getattr(self.instance, "course", None)
+        order = attrs.get("order", getattr(self.instance, "order", None))
+        if course is None or order is None:
+            return attrs
+        qs = Lesson.objects.filter(course=course, order=order)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError(
+                {
+                    "order": "A lesson with this order already exists in this course.",
+                }
+            )
+        return attrs
 
 
 class EducatorAnnotationSerializer(serializers.ModelSerializer):
@@ -181,9 +231,27 @@ class EducatorAnnotationSerializer(serializers.ModelSerializer):
             "order",
         ]
         read_only_fields = ["id"]
+        validators = []
 
     def validate_lesson(self, lesson):
         request = self.context.get("request")
         if request and lesson.course.owner_id != request.user.id:
             raise serializers.ValidationError("You can only add hotspots to your own lessons.")
         return lesson
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+        lesson = attrs.get("lesson") or getattr(self.instance, "lesson", None)
+        order = attrs.get("order", getattr(self.instance, "order", None))
+        if lesson is None or order is None:
+            return attrs
+        qs = Annotation.objects.filter(lesson=lesson, order=order)
+        if self.instance is not None:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise serializers.ValidationError(
+                {
+                    "order": "A hotspot with this order already exists in this lesson.",
+                }
+            )
+        return attrs
