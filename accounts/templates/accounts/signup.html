@@ -5,12 +5,12 @@
 {% block content %}
 <div class="auth-card">
     <h1>Sign up</h1>
-    <p class="lead">Choose student to learn, or educator to create courses.</p>
+    <p class="lead">Create a student account to explore courses and track progress. Educator access is granted by an administrator.</p>
 
     <form method="post">
         {% csrf_token %}
         {% for field in form %}
-            <div class="form-group{% if field.name == 'role' %} role-field{% endif %}">
+            <div class="form-group">
                 <label for="{{ field.id_for_label }}">{{ field.label }}</label>
                 {{ field }}
                 {% if field.help_text %}

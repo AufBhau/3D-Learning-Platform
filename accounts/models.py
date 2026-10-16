@@ -35,7 +35,16 @@ def ensure_user_profile(sender, instance, created, **kwargs):
 
 
 def get_or_create_profile(user):
-    profile, _ = Profile.objects.get_or_create(user=user)
+    cached = getattr(user, "_cached_profile", None)
+    if cached is not None:
+        return cached
+
+    try:
+        profile = user.profile
+    except Profile.DoesNotExist:
+        profile, _ = Profile.objects.get_or_create(user=user)
+
+    user._cached_profile = profile
     return profile
 
 
