@@ -4,8 +4,32 @@ Django settings for learning_platform project.
 
 from pathlib import Path
 import os
+import sys
+
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+def _load_dotenv(path):
+    """Load KEY=VALUE pairs from a .env file into os.environ (no overwrite)."""
+    if not path.is_file():
+        return
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, _, value = line.partition("=")
+        key = key.strip()
+        if not key or key in os.environ:
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'"}:
+            value = value[1:-1]
+        os.environ[key] = value
+
+
+_load_dotenv(BASE_DIR / ".env")
 
 
 def env(key, default=None):
@@ -19,12 +43,19 @@ def env_bool(key, default=False):
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
 
-SECRET_KEY = env(
-    "DJANGO_SECRET_KEY",
-    "django-insecure-dev-only-change-me-before-deploy",
-)
+DEBUG = env_bool("DJANGO_DEBUG", False)
 
-DEBUG = env_bool("DJANGO_DEBUG", True)
+_secret = env("DJANGO_SECRET_KEY")
+_running_tests = "test" in sys.argv
+if _secret:
+    SECRET_KEY = _secret
+elif DEBUG or _running_tests:
+    SECRET_KEY = "django-insecure-dev-only-change-me-before-deploy"
+else:
+    raise ImproperlyConfigured(
+        "Set DJANGO_SECRET_KEY in the environment (or .env). "
+        "An insecure fallback is only allowed when DJANGO_DEBUG=True."
+    )
 
 ALLOWED_HOSTS = [
     host.strip()
@@ -135,3 +166,13 @@ REST_FRAMEWORK = {
     ],
 }
 
+if not DEBUG and not _running_tests:
+    SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", True)
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    SECURE_HSTS_SECONDS = int(env("DJANGO_SECURE_HSTS_SECONDS", "31536000"))
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool(
+        "DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS", True
+    )
+    SECURE_HSTS_PRELOAD = env_bool("DJANGO_SECURE_HSTS_PRELOAD", True)
+    SECURE_CONTENT_TYPE_NOSNIFF = True

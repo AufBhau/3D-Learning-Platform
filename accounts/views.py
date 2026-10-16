@@ -72,21 +72,39 @@ def logout_view(request):
 
 @login_required
 def profile_view(request):
+    from django.db.models import Count, Q
+
     from courses.models import Annotation, Course, Lesson, StudentProgress
     from courses.views import DEMO_COURSE_TITLE
 
     profile = get_or_create_profile(request.user)
 
-    courses = list(Course.objects.exclude(title=DEMO_COURSE_TITLE))
+    courses = list(
+        Course.objects.exclude(title=DEMO_COURSE_TITLE)
+        .annotate(
+            lesson_count=Count("lessons", distinct=True),
+            completed_count=Count(
+                "lessons",
+                filter=Q(
+                    lessons__progress__student=request.user,
+                    lessons__progress__completed=True,
+                ),
+                distinct=True,
+            ),
+        )
+        .order_by("-updated_at")
+    )
     course_cards = []
     for course in courses:
-        progress = course.progress_for(request.user)
+        total = course.lesson_count
+        completed = course.completed_count
+        percent = int(round((completed / total) * 100)) if total else 0
         course_cards.append(
             {
                 "course": course,
-                "lesson_count": progress["total"],
-                "percent": progress["percent"],
-                "completed": progress["completed"],
+                "lesson_count": total,
+                "percent": percent,
+                "completed": completed,
             }
         )
 

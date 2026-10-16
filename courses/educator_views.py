@@ -1,5 +1,5 @@
 from django.contrib import messages
-from django.db.models import Count, Max
+from django.db.models import Count, Max, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
@@ -28,6 +28,11 @@ def dashboard(request):
         .annotate(
             lesson_count=Count("lessons", distinct=True),
             hotspot_count=Count("lessons__annotations", distinct=True),
+            modeled_lessons=Count(
+                "lessons",
+                filter=Q(lessons__model_file__gt=""),
+                distinct=True,
+            ),
         )
         .order_by("-updated_at")
     )
@@ -39,11 +44,6 @@ def dashboard(request):
         "hotspots": Annotation.objects.filter(lesson__course__owner=request.user).count(),
         "with_models": owned_lessons.exclude(model_file="").count(),
     }
-
-    # Per-course model count for cards
-    for course in courses:
-        course.modeled_lessons = course.lessons.exclude(model_file="").count()
-
 
     return render(
         request,
@@ -123,7 +123,7 @@ def lesson_create(request, course_id):
     next_order = (course.lessons.aggregate(m=Max("order")).get("m") or 0) + 1
 
     if request.method == "POST":
-        form = LessonForm(request.POST, request.FILES)
+        form = LessonForm(request.POST, request.FILES, course=course)
         if form.is_valid():
             lesson = form.save(commit=False)
             lesson.course = course
@@ -134,7 +134,7 @@ def lesson_create(request, course_id):
             )
             return redirect("educator_lesson_edit", lesson_id=lesson.id)
     else:
-        form = LessonForm(initial={"order": next_order})
+        form = LessonForm(initial={"order": next_order}, course=course)
 
     return render(
         request,
@@ -152,13 +152,18 @@ def lesson_edit(request, lesson_id):
     lesson = _owned_lesson(request.user, lesson_id)
 
     if request.method == "POST":
-        form = LessonForm(request.POST, request.FILES, instance=lesson)
+        form = LessonForm(
+            request.POST,
+            request.FILES,
+            instance=lesson,
+            course=lesson.course,
+        )
         if form.is_valid():
             form.save()
             messages.success(request, f'Lesson "{lesson.title}" updated.')
             return redirect("educator_course_detail", course_id=lesson.course_id)
     else:
-        form = LessonForm(instance=lesson)
+        form = LessonForm(instance=lesson, course=lesson.course)
 
     return render(
         request,

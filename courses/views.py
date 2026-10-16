@@ -110,10 +110,11 @@ def lesson_viewer(request, lesson_id):
 
     progress = None
     if request.user.is_authenticated:
-        progress, _ = StudentProgress.objects.get_or_create(
+        # Read-only on GET; rows are created when marking complete/incomplete.
+        progress = StudentProgress.objects.filter(
             student=request.user,
             lesson=lesson,
-        )
+        ).first()
 
     viewer_config = {
         "lessonId": lesson.id,
