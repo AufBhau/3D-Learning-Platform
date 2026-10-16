@@ -33,6 +33,23 @@ class LessonForm(forms.ModelForm):
             "interaction_guide": forms.Textarea(attrs={"rows": 3}),
         }
 
+    def __init__(self, *args, course=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.course = course or getattr(self.instance, "course", None)
+
+    def clean_order(self):
+        order = self.cleaned_data["order"]
+        if self.course is None:
+            return order
+        qs = Lesson.objects.filter(course=self.course, order=order)
+        if self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError(
+                "A lesson with this order already exists in this course."
+            )
+        return order
+
 
 class AnnotationForm(forms.ModelForm):
     class Meta:

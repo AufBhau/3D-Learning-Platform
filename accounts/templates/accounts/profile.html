@@ -29,11 +29,10 @@
 <section class="section">
     <h2>Your role</h2>
     <p class="lead" style="margin-bottom:1rem">
-        Your role was set when you created this account and cannot be changed here.
         {% if profile.is_educator %}
-            Create a separate student account if you want to learn without teaching tools.
+            You have educator access. Ask an administrator if you need it removed.
         {% else %}
-            Create a separate educator account if you want to publish courses.
+            Public signup creates student accounts. Ask an administrator if you need educator access to publish courses.
         {% endif %}
     </p>
     {% if profile.is_educator %}
