@@ -8,6 +8,7 @@ from django.views.decorators.http import require_POST
 
 from .forms import SignUpForm
 from .models import get_or_create_profile, user_is_educator
+from .ratelimit import clear_attempts, record_failed_attempt, too_many_attempts
 
 
 def _default_redirect(user):
@@ -41,12 +42,26 @@ def login_view(request):
         return redirect(_default_redirect(request.user))
 
     if request.method == "POST":
+        if too_many_attempts(request, prefix="login"):
+            messages.error(
+                request,
+                "Too many failed login attempts. Please wait a few minutes and try again.",
+            )
+            form = AuthenticationForm(request)
+            return render(
+                request,
+                "accounts/login.html",
+                {"form": form, "login_throttled": True},
+                status=429,
+            )
+
         form = AuthenticationForm(request, data=request.POST)
         if form.is_valid():
             username = form.cleaned_data.get("username")
             password = form.cleaned_data.get("password")
             user = authenticate(username=username, password=password)
             if user is not None:
+                clear_attempts(request, prefix="login")
                 login(request, user)
                 messages.success(request, f"Welcome back, {username}!")
                 next_url = request.POST.get("next") or request.GET.get("next")
@@ -57,6 +72,7 @@ def login_view(request):
                 ):
                     return redirect(next_url)
                 return redirect(_default_redirect(user))
+        record_failed_attempt(request, prefix="login")
     else:
         form = AuthenticationForm()
 

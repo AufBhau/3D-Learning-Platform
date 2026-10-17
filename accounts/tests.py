@@ -1,5 +1,6 @@
 from django.contrib.auth.models import User
-from django.test import TestCase
+from django.core.cache import cache
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
 from accounts.models import Profile, get_or_create_profile
@@ -39,3 +40,46 @@ class EducatorGateMessageTests(TestCase):
             response,
             "Ask an administrator to grant educator access",
         )
+
+
+class LoginThrottleTests(TestCase):
+    def setUp(self):
+        cache.clear()
+        User.objects.create_user("victim", password="correct-horse-battery")
+
+    @override_settings(LOGIN_ATTEMPT_LIMIT=3, LOGIN_ATTEMPT_WINDOW=60)
+    def test_login_locks_after_repeated_failures(self):
+        for _ in range(3):
+            response = self.client.post(
+                reverse("login"),
+                {"username": "victim", "password": "wrong-password"},
+            )
+            self.assertIn(response.status_code, (200, 429))
+
+        locked = self.client.post(
+            reverse("login"),
+            {"username": "victim", "password": "wrong-password"},
+        )
+        self.assertEqual(locked.status_code, 429)
+        self.assertContains(
+            locked, "Too many failed login attempts", status_code=429
+        )
+
+        # Even the correct password stays locked until the window expires.
+        still_locked = self.client.post(
+            reverse("login"),
+            {"username": "victim", "password": "correct-horse-battery"},
+        )
+        self.assertEqual(still_locked.status_code, 429)
+
+    @override_settings(LOGIN_ATTEMPT_LIMIT=5, LOGIN_ATTEMPT_WINDOW=60)
+    def test_successful_login_clears_failures(self):
+        self.client.post(
+            reverse("login"),
+            {"username": "victim", "password": "wrong-password"},
+        )
+        response = self.client.post(
+            reverse("login"),
+            {"username": "victim", "password": "correct-horse-battery"},
+        )
+        self.assertEqual(response.status_code, 302)

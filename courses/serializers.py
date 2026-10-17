@@ -2,12 +2,17 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from .models import Annotation, Course, Lesson, StudentProgress
-from .validators import validate_course_thumbnail_size, validate_lesson_model_size
+from .validators import (
+    validate_course_thumbnail_size,
+    validate_finite_float,
+    validate_lesson_model_file,
+    validate_positive_finite,
+)
 
 
-def _drf_file_size(validate_fn, value):
+def _drf_validate(validate_fn, value, **kwargs):
     try:
-        return validate_fn(value)
+        return validate_fn(value, **kwargs) if kwargs else validate_fn(value)
     except DjangoValidationError as exc:
         raise serializers.ValidationError(exc.messages) from exc
 
@@ -153,7 +158,7 @@ class EducatorCourseSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "lesson_count", "created_at", "updated_at"]
 
     def validate_thumbnail(self, value):
-        return _drf_file_size(validate_course_thumbnail_size, value)
+        return _drf_validate(validate_course_thumbnail_size, value)
 
 
 class EducatorLessonSerializer(serializers.ModelSerializer):
@@ -193,23 +198,75 @@ class EducatorLessonSerializer(serializers.ModelSerializer):
         return course
 
     def validate_model_file(self, value):
-        return _drf_file_size(validate_lesson_model_size, value)
+        return _drf_validate(validate_lesson_model_file, value)
+
+    def validate_camera_distance_factor(self, value):
+        return _drf_validate(
+            validate_positive_finite, value, label="Default zoom", minimum=0.05
+        )
+
+    def validate_camera_min_distance_factor(self, value):
+        return _drf_validate(
+            validate_positive_finite, value, label="Closest zoom", minimum=0.05
+        )
+
+    def validate_camera_max_distance_factor(self, value):
+        return _drf_validate(
+            validate_positive_finite, value, label="Farthest zoom", minimum=0.1
+        )
+
+    def validate_model_rotation_x(self, value):
+        return _drf_validate(validate_finite_float, value, label="Rotation X")
+
+    def validate_model_rotation_y(self, value):
+        return _drf_validate(validate_finite_float, value, label="Rotation Y")
+
+    def validate_model_rotation_z(self, value):
+        return _drf_validate(validate_finite_float, value, label="Rotation Z")
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
         course = attrs.get("course") or getattr(self.instance, "course", None)
         order = attrs.get("order", getattr(self.instance, "order", None))
-        if course is None or order is None:
-            return attrs
-        qs = Lesson.objects.filter(course=course, order=order)
-        if self.instance is not None:
-            qs = qs.exclude(pk=self.instance.pk)
-        if qs.exists():
-            raise serializers.ValidationError(
-                {
-                    "order": "A lesson with this order already exists in this course.",
-                }
+        if course is not None and order is not None:
+            qs = Lesson.objects.filter(course=course, order=order)
+            if self.instance is not None:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.exists():
+                raise serializers.ValidationError(
+                    {
+                        "order": "A lesson with this order already exists in this course.",
+                    }
+                )
+
+        distance = attrs.get(
+            "camera_distance_factor",
+            getattr(self.instance, "camera_distance_factor", None),
+        )
+        zoom_min = attrs.get(
+            "camera_min_distance_factor",
+            getattr(self.instance, "camera_min_distance_factor", None),
+        )
+        zoom_max = attrs.get(
+            "camera_max_distance_factor",
+            getattr(self.instance, "camera_max_distance_factor", None),
+        )
+        errors = {}
+        if zoom_min is not None and zoom_max is not None and zoom_min > zoom_max:
+            errors["camera_min_distance_factor"] = (
+                "Closest zoom must be less than or equal to farthest zoom."
             )
+        if (
+            distance is not None
+            and zoom_min is not None
+            and zoom_max is not None
+            and not (zoom_min <= distance <= zoom_max)
+        ):
+            errors["camera_distance_factor"] = (
+                "Default zoom must be between the closest and farthest limits."
+            )
+        if errors:
+            raise serializers.ValidationError(errors)
         return attrs
 
 
