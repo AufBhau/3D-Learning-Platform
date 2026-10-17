@@ -1,7 +1,12 @@
 from django import forms
 
 from .models import Annotation, Course, Lesson
-from .validators import validate_course_thumbnail_size, validate_lesson_model_size
+from .validators import (
+    validate_course_thumbnail_size,
+    validate_finite_float,
+    validate_lesson_model_file,
+    validate_positive_finite,
+)
 
 
 class CourseForm(forms.ModelForm):
@@ -105,7 +110,43 @@ class LessonForm(forms.ModelForm):
         return order
 
     def clean_model_file(self):
-        return validate_lesson_model_size(self.cleaned_data.get("model_file"))
+        return validate_lesson_model_file(self.cleaned_data.get("model_file"))
+
+    def clean_camera_distance_factor(self):
+        return validate_positive_finite(
+            self.cleaned_data.get("camera_distance_factor"),
+            label="Default zoom",
+            minimum=0.05,
+        )
+
+    def clean_camera_min_distance_factor(self):
+        return validate_positive_finite(
+            self.cleaned_data.get("camera_min_distance_factor"),
+            label="Closest zoom",
+            minimum=0.05,
+        )
+
+    def clean_camera_max_distance_factor(self):
+        return validate_positive_finite(
+            self.cleaned_data.get("camera_max_distance_factor"),
+            label="Farthest zoom",
+            minimum=0.1,
+        )
+
+    def clean_model_rotation_x(self):
+        return validate_finite_float(
+            self.cleaned_data.get("model_rotation_x"), label="Rotation X"
+        )
+
+    def clean_model_rotation_y(self):
+        return validate_finite_float(
+            self.cleaned_data.get("model_rotation_y"), label="Rotation Y"
+        )
+
+    def clean_model_rotation_z(self):
+        return validate_finite_float(
+            self.cleaned_data.get("model_rotation_z"), label="Rotation Z"
+        )
 
 
 class AnnotationForm(forms.ModelForm):

@@ -296,3 +296,222 @@ class QueryBudgetTests(TestCase):
         with self.assertNumQueries(5):
             response = self.client.get(reverse("profile"))
         self.assertEqual(response.status_code, 200)
+
+
+class ProductionServingTests(TestCase):
+    def test_whitenoise_and_proxy_ssl_configured(self):
+        from django.conf import settings
+
+        self.assertIn(
+            "whitenoise.middleware.WhiteNoiseMiddleware", settings.MIDDLEWARE
+        )
+        self.assertEqual(
+            settings.SECURE_PROXY_SSL_HEADER,
+            ("HTTP_X_FORWARDED_PROTO", "https"),
+        )
+        self.assertTrue(settings.SERVE_MEDIA)
+
+    def test_media_url_serves_uploaded_file(self):
+        from django.conf import settings
+        from pathlib import Path
+
+        media_dir = Path(settings.MEDIA_ROOT) / "3d_models"
+        media_dir.mkdir(parents=True, exist_ok=True)
+        target = media_dir / "serve_probe.glb"
+        target.write_bytes(b"glTF\x02\x00\x00\x00probe")
+        try:
+            response = self.client.get("/media/3d_models/serve_probe.glb")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(b"".join(response.streaming_content), target.read_bytes())
+        finally:
+            if target.exists():
+                target.unlink()
+
+
+class PublicApiTests(TestCase):
+    def setUp(self):
+        self.course = Course.objects.create(title="API Course", description="d")
+        self.lesson = Lesson.objects.create(
+            course=self.course, title="API Lesson", description="d", order=1
+        )
+
+    def test_course_list_and_lesson_detail(self):
+        list_resp = self.client.get("/api/courses/")
+        self.assertEqual(list_resp.status_code, 200)
+        self.assertTrue(any(row["id"] == self.course.id for row in list_resp.json()))
+
+        detail = self.client.get(f"/api/lessons/{self.lesson.id}/")
+        self.assertEqual(detail.status_code, 200)
+        self.assertEqual(detail.json()["title"], "API Lesson")
+        self.assertIn("camera_zoom", detail.json())
+
+
+class CrossTenantEducatorApiTests(TestCase):
+    def setUp(self):
+        self.owner = _make_educator("owner_ed")
+        self.other = _make_educator("other_ed")
+        self.course = Course.objects.create(
+            title="Owner Course", description="d", owner=self.owner
+        )
+        self.lesson = Lesson.objects.create(
+            course=self.course, title="Owned Lesson", description="d", order=1
+        )
+        self.hotspot = Annotation.objects.create(
+            lesson=self.lesson,
+            title="Spot",
+            description="",
+            position_x=0,
+            position_y=0,
+            position_z=0,
+            order=1,
+        )
+        self.client = APIClient()
+        self.client.force_authenticate(user=self.other)
+
+    def test_cannot_retrieve_or_update_foreign_course(self):
+        response = self.client.get(f"/api/educator/courses/{self.course.id}/")
+        self.assertEqual(response.status_code, 404)
+
+        response = self.client.patch(
+            f"/api/educator/courses/{self.course.id}/",
+            {"title": "Hijacked"},
+            format="json",
+        )
+        self.assertEqual(response.status_code, 404)
+        self.course.refresh_from_db()
+        self.assertEqual(self.course.title, "Owner Course")
+
+    def test_cannot_add_lesson_to_foreign_course(self):
+        response = self.client.post(
+            "/api/educator/lessons/",
+            {
+                "course": self.course.id,
+                "title": "Intruder",
+                "description": "nope",
+                "order": 2,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("course", response.data)
+        self.assertFalse(
+            Lesson.objects.filter(course=self.course, title="Intruder").exists()
+        )
+
+    def test_cannot_touch_foreign_annotation(self):
+        response = self.client.get(
+            f"/api/educator/annotations/{self.hotspot.id}/"
+        )
+        self.assertEqual(response.status_code, 404)
+
+
+class CameraAndModelValidationTests(TestCase):
+    def setUp(self):
+        self.educator = _make_educator("cam_ed")
+        self.course = Course.objects.create(
+            title="Cam Course", description="d", owner=self.educator
+        )
+        self.api = APIClient()
+        self.api.force_authenticate(user=self.educator)
+
+    def test_serializer_rejects_nan_camera_zoom(self):
+        from courses.serializers import EducatorLessonSerializer
+
+        serializer = EducatorLessonSerializer(
+            data={
+                "course": self.course.id,
+                "title": "Bad zoom",
+                "description": "d",
+                "order": 1,
+                "camera_distance_factor": float("nan"),
+            },
+            context={"request": type("R", (), {"user": self.educator})()},
+        )
+        self.assertFalse(serializer.is_valid())
+        self.assertIn("camera_distance_factor", serializer.errors)
+
+    def test_serializer_rejects_non_positive_camera_zoom(self):
+        response = self.api.post(
+            "/api/educator/lessons/",
+            {
+                "course": self.course.id,
+                "title": "Neg zoom",
+                "description": "d",
+                "order": 1,
+                "camera_distance_factor": -1,
+                "camera_min_distance_factor": 0.25,
+                "camera_max_distance_factor": 6,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("camera_distance_factor", response.data)
+
+    def test_rejects_html_disguised_as_glb(self):
+        form = LessonForm(
+            data={
+                "title": "Evil",
+                "description": "d",
+                "order": 1,
+                "interaction_guide": "",
+                "model_rotation_x": 0,
+                "model_rotation_y": 0,
+                "model_rotation_z": 0,
+                "camera_distance_factor": 1,
+                "camera_min_distance_factor": 0.25,
+                "camera_max_distance_factor": 6,
+            },
+            files={
+                "model_file": SimpleUploadedFile(
+                    "evil.glb",
+                    b"<html><script>alert(1)</script></html>",
+                    content_type="model/gltf-binary",
+                )
+            },
+            course=self.course,
+        )
+        self.assertFalse(form.is_valid())
+        self.assertIn("model_file", form.errors)
+
+    def test_accepts_glb_magic_header(self):
+        form = LessonForm(
+            data={
+                "title": "Good",
+                "description": "d",
+                "order": 1,
+                "interaction_guide": "",
+                "model_rotation_x": 0,
+                "model_rotation_y": 0,
+                "model_rotation_z": 0,
+                "camera_distance_factor": 1,
+                "camera_min_distance_factor": 0.25,
+                "camera_max_distance_factor": 6,
+            },
+            files={
+                "model_file": SimpleUploadedFile(
+                    "ok.glb",
+                    b"glTF" + b"\x00" * 20,
+                    content_type="model/gltf-binary",
+                )
+            },
+            course=self.course,
+        )
+        self.assertTrue(form.is_valid(), form.errors)
+
+
+class ApiThrottleTests(TestCase):
+    def test_anon_api_returns_429_when_rate_exceeded(self):
+        from unittest.mock import patch
+
+        from rest_framework.throttling import AnonRateThrottle
+
+        from courses.api_views import CourseListAPIView
+
+        class BurstThrottle(AnonRateThrottle):
+            rate = "2/min"
+
+        Course.objects.create(title="T", description="d")
+        with patch.object(CourseListAPIView, "throttle_classes", [BurstThrottle]):
+            self.assertEqual(self.client.get("/api/courses/").status_code, 200)
+            self.assertEqual(self.client.get("/api/courses/").status_code, 200)
+            self.assertEqual(self.client.get("/api/courses/").status_code, 429)

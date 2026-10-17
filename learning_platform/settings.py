@@ -83,6 +83,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -143,9 +144,31 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
+_staticfiles_backend = (
+    "django.contrib.staticfiles.storage.StaticFilesStorage"
+    if DEBUG or _running_tests
+    else "whitenoise.storage.CompressedStaticFilesStorage"
+)
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": _staticfiles_backend,
+    },
+}
+# Serve app static/ without collectstatic during local DEBUG / tests.
+WHITENOISE_USE_FINDERS = DEBUG or _running_tests
+WHITENOISE_AUTOREFRESH = DEBUG
 
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
+# Local disk media for demos / PythonAnywhere. Set False when using object storage.
+SERVE_MEDIA = env_bool("DJANGO_SERVE_MEDIA", True)
+
+# Login brute-force protection (cache-backed).
+LOGIN_ATTEMPT_LIMIT = int(env("DJANGO_LOGIN_ATTEMPT_LIMIT", "5"))
+LOGIN_ATTEMPT_WINDOW = int(env("DJANGO_LOGIN_ATTEMPT_WINDOW", "300"))
 
 # Upload caps (request body + per-field checks in forms/serializers).
 DATA_UPLOAD_MAX_MEMORY_SIZE = int(env("DJANGO_DATA_UPLOAD_MAX_MEMORY_SIZE", str(25 * 1024 * 1024)))
@@ -167,6 +190,14 @@ _drf_renderers = [
 if DEBUG or _running_tests:
     _drf_renderers.append("rest_framework.renderers.BrowsableAPIRenderer")
 
+_throttle_rates = {
+    "anon": env("DJANGO_THROTTLE_ANON", "60/min"),
+    "user": env("DJANGO_THROTTLE_USER", "120/min"),
+}
+if _running_tests:
+    # Keep suite fast; dedicated tests override rates when checking 429s.
+    _throttle_rates = {"anon": "10000/min", "user": "10000/min"}
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
         "rest_framework.authentication.SessionAuthentication",
@@ -175,7 +206,15 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.AllowAny",
     ],
     "DEFAULT_RENDERER_CLASSES": _drf_renderers,
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": _throttle_rates,
 }
+
+# PythonAnywhere / reverse proxies terminate TLS and set this header.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 if not DEBUG and not _running_tests:
     SECURE_SSL_REDIRECT = env_bool("DJANGO_SECURE_SSL_REDIRECT", True)

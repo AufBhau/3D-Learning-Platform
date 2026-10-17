@@ -77,7 +77,9 @@ Copy `.env.example` to `.env` (loaded automatically). Defaults are fail-closed: 
 | `DJANGO_ALLOWED_HOSTS` | Comma-separated hosts |
 | `DJANGO_CSRF_TRUSTED_ORIGINS` | Trusted origins for CSRF (e.g. `https://your-domain.com`) |
 
-See `learning_platform/settings.py`. Media/static file serving via Django is enabled only when `DEBUG=True`.
+See `learning_platform/settings.py`.
+
+**Production static/media:** WhiteNoise serves collected static files when `DEBUG=False`. Uploaded media stays on local disk (`MEDIA_ROOT`) and is served when `DJANGO_SERVE_MEDIA=True` (default) — suitable for PythonAnywhere. After deploy: `pip install -r requirements.txt`, `migrate`, `collectstatic`, then reload the web app.
 
 ### Create an educator
 
@@ -156,6 +158,7 @@ Creates **Demo: Explore a Box** with a generated box `.glb` and three face hotsp
 - Static assets live in `static/`; media uploads go to `media/`.
 - Demo models and course thumbnails under `media/3d_models/` and `media/course_thumbnails/` are kept in the repo for a working local/demo site.
 - With `DEBUG=False`, configure `DJANGO_ALLOWED_HOSTS` and `DJANGO_CSRF_TRUSTED_ORIGINS`, then run `python manage.py collectstatic`.
+- Login attempts are rate-limited; API requests use DRF anon/user throttles.
 
 ## License
 
