@@ -26,6 +26,16 @@ class AnnotationSerializer(serializers.ModelSerializer):
         model = Annotation
         fields = ["id", "title", "description", "x", "y", "z", "order"]
 
+    def to_representation(self, instance):
+        """Keep public lesson JSON encodeable if a bad coordinate slipped into the DB."""
+        data = super().to_representation(instance)
+        for key in ("x", "y", "z"):
+            try:
+                data[key] = validate_finite_float(data.get(key), label=key.upper())
+            except DjangoValidationError:
+                data[key] = 0.0
+        return data
+
 
 class LessonListSerializer(serializers.ModelSerializer):
     class Meta:
@@ -295,6 +305,15 @@ class EducatorAnnotationSerializer(serializers.ModelSerializer):
         if request and lesson.course.owner_id != request.user.id:
             raise serializers.ValidationError("You can only add hotspots to your own lessons.")
         return lesson
+
+    def validate_x(self, value):
+        return _drf_validate(validate_finite_float, value, label="X")
+
+    def validate_y(self, value):
+        return _drf_validate(validate_finite_float, value, label="Y")
+
+    def validate_z(self, value):
+        return _drf_validate(validate_finite_float, value, label="Z")
 
     def validate(self, attrs):
         attrs = super().validate(attrs)
