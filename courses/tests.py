@@ -515,3 +515,69 @@ class ApiThrottleTests(TestCase):
             self.assertEqual(self.client.get("/api/courses/").status_code, 200)
             self.assertEqual(self.client.get("/api/courses/").status_code, 200)
             self.assertEqual(self.client.get("/api/courses/").status_code, 429)
+
+
+class AnnotationCoordinateValidationTests(TestCase):
+    def setUp(self):
+        self.educator = _make_educator("anno_ed")
+        self.course = Course.objects.create(
+            title="Anno Course", description="d", owner=self.educator
+        )
+        self.lesson = Lesson.objects.create(
+            course=self.course, title="L", description="d", order=1
+        )
+        self.api = APIClient()
+        self.api.force_authenticate(user=self.educator)
+
+    def test_educator_api_rejects_infinite_coordinate(self):
+        response = self.api.post(
+            "/api/educator/annotations/",
+            {
+                "lesson": self.lesson.id,
+                "title": "Broken",
+                "description": "",
+                "x": "inf",
+                "y": 0,
+                "z": 0,
+                "order": 1,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("x", response.data)
+        self.assertFalse(
+            Annotation.objects.filter(lesson=self.lesson, title="Broken").exists()
+        )
+
+    def test_educator_api_rejects_nan_coordinate(self):
+        response = self.api.post(
+            "/api/educator/annotations/",
+            {
+                "lesson": self.lesson.id,
+                "title": "NaN spot",
+                "description": "",
+                "x": "nan",
+                "y": 0,
+                "z": 0,
+                "order": 1,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("x", response.data)
+
+    def test_public_lesson_api_survives_legacy_infinite_coordinate(self):
+        Annotation.objects.create(
+            lesson=self.lesson,
+            title="Legacy bad",
+            description="",
+            position_x=float("inf"),
+            position_y=0,
+            position_z=0,
+            order=1,
+        )
+        response = self.client.get(f"/api/lessons/{self.lesson.id}/")
+        self.assertEqual(response.status_code, 200)
+        coords = response.json()["annotations"][0]
+        self.assertEqual(coords["x"], 0.0)
+        self.assertTrue(all(isinstance(coords[k], float) for k in ("x", "y", "z")))

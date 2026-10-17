@@ -188,6 +188,21 @@ class AnnotationForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.lesson = lesson or getattr(self.instance, "lesson", None)
 
+    def clean_position_x(self):
+        return validate_finite_float(
+            self.cleaned_data.get("position_x"), label="X"
+        )
+
+    def clean_position_y(self):
+        return validate_finite_float(
+            self.cleaned_data.get("position_y"), label="Y"
+        )
+
+    def clean_position_z(self):
+        return validate_finite_float(
+            self.cleaned_data.get("position_z"), label="Z"
+        )
+
     def clean_order(self):
         order = self.cleaned_data["order"]
         if self.lesson is None:
