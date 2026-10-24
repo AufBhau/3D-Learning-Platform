@@ -18,12 +18,17 @@ env/
 db.sqlite3
 db.sqlite3-journal
 staticfiles/
+_db_recovery/
 media/*
 !media/.gitkeep
 !media/3d_models/
 !media/3d_models/**
 !media/course_thumbnails/
 !media/course_thumbnails/**
+# Django adds _ plus 7 random characters when the same filename is uploaded again.
+# Named lesson files stay in git. These copies stay on disk only.
+media/3d_models/*_???????.*
+media/course_thumbnails/*_???????.*
 !static/.gitkeep
 
 # Environment / secrets
