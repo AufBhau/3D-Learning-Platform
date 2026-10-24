@@ -1,0 +1,11 @@
+venv
+.venv
+.git
+.env
+db.sqlite3
+db.sqlite3-journal
+staticfiles
+__pycache__
+**/__pycache__
+_db_recovery
+*.md

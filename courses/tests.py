@@ -503,6 +503,7 @@ class ApiThrottleTests(TestCase):
     def test_anon_api_returns_429_when_rate_exceeded(self):
         from unittest.mock import patch
 
+        from django.core.cache import cache
         from rest_framework.throttling import AnonRateThrottle
 
         from courses.api_views import CourseListAPIView
@@ -510,6 +511,9 @@ class ApiThrottleTests(TestCase):
         class BurstThrottle(AnonRateThrottle):
             rate = "2/min"
 
+        # Earlier tests also call the API as anonymous. Throttle history
+        # lives in the process-wide cache, so start this check from empty.
+        cache.clear()
         Course.objects.create(title="T", description="d")
         with patch.object(CourseListAPIView, "throttle_classes", [BurstThrottle]):
             self.assertEqual(self.client.get("/api/courses/").status_code, 200)

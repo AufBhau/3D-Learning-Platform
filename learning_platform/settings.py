@@ -114,12 +114,20 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "learning_platform.wsgi.application"
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+# No DATABASE_URL: local runserver and tests keep using SQLite.
+# Docker Compose and AWS set DATABASE_URL, and that environment uses PostgreSQL.
+_db_url = env("DATABASE_URL")
+if _db_url:
+    import dj_database_url
+
+    DATABASES = {"default": dj_database_url.parse(_db_url, conn_max_age=600)}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
     }
-}
 
 AUTH_PASSWORD_VALIDATORS = [
     {
